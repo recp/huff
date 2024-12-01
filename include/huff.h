@@ -82,6 +82,12 @@ typedef __uint128_t big_int_t;
 typedef uintmax_t   big_int_t;
 #endif
 
+#ifdef ENABLE_BIG_BITSTREAM
+typedef big_int_t bitstream_t;
+#else
+typedef uint64_t bitstream_t;
+#endif
+
 typedef struct huff_table_t {
   uint16_t fast_table[256];   /* Fast lookup table for short codes (up to 8 bits) */
   uint8_t  fast_length[256];  /* Code lengths for fast decoding table */
@@ -109,6 +115,68 @@ huff_init(huff_table_t   * __restrict table,
           const uint8_t  * __restrict lengths,
           const uint16_t * __restrict symbols,
           uint16_t                    n);
+
+/**
+ * @brief Reads a bitstream_t worth of bits from the input stream.
+ *
+ * @param[in, out] stream     Pointer to the input stream.
+ * @param[in, out] bit_offset Current bit offset within the stream.
+ * @return                    A `bitstream_t` containing the requested bits.
+ */
+HUFF_EXPORT
+bitstream_t
+huff_read_lsb(const uint8_t *stream, size_t *bit_offset, size_t stream_size);
+
+/**
+ * @brief Reads a bitstream_t worth of bits from the input stream.
+ *
+ * @param[in, out] stream     Pointer to the input stream.
+ * @param[in, out] bit_offset Current bit offset within the stream.
+ * @return                    A `bitstream_t` containing the requested bits.
+ */
+HUFF_EXPORT
+bitstream_t
+huff_read_msb(const uint8_t *stream, size_t *bit_offset, size_t stream_size);
+
+/**
+ * @brief Reverses the bit order of the input value.
+ *
+ * Reverses the bit order of a `big_int_t` value, useful for converting
+ * an LSB-first bitstream into MSB-first order.
+ *
+ * @param[in] x The input value whose bits are to be reversed.
+ * @return The input value with its bit order reversed.
+ *
+ * @example
+ * big_int_t original = 0b10110010; // Example 8-bit value
+ * big_int_t reversed = huff_rev_bits(original);
+ * // reversed is now 0b01001101
+ */
+HUFF_EXPORT
+big_int_t
+huff_rev_bits(big_int_t x);
+
+/**
+ * @brief Decodes a single symbol from a Huffman-encoded bitstream.
+ *
+ * This function decodes a symbol using a pre-initialized Huffman table. The
+ * bitstream is expected to be in MSB-first order, where the most significant
+ * bits are processed first. If the bitstream is in LSB-first order, it should
+ * be reversed before calling this function. You can use huff_rev_bits() yo reverse
+ * bitstream
+ *
+ * @param[in] table       Pointer to the initialized Huffman table.
+ * @param[in] bitstream   The bitstream to decode, in MSB-first order.
+ * @param[in] bit_length  The number of valid bits in the bitstream.
+ *
+ * @return The decoded symbol, or (uint_fast16_t)-1 if decoding fails.
+ *
+ * @note The caller is responsible for ensuring the bitstream contains
+ *       enough valid bits for decoding a symbol.
+ */
+HUFF_EXPORT
+uint_fast16_t
+huff_decode(const huff_table_t *table, bitstream_t bitstream, uint8_t bit_length);
 
 #ifdef __cplusplus
 }
