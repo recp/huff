@@ -38,11 +38,9 @@
 #  define SIMD_WIDTH 8 /* Fallback to scalar */
 #endif
 
-#include "../include/huff.h"
+#include "../include/huff/huff.h"
 
-/* 15: DEFLATE, 16: JPEG */
-#define MAX_CODE_LENGTH 16  /* Maximum length of Huffman codes */
-#define FAST_TABLE_BITS  8  /* Number of bits used for fast lookup */
+#define FAST_MASK        ((1 << FAST_TABLE_BITS) - 1)
 
 #define BITSTREAM_T_IS_128 (sizeof(bitstream_t) > 8)
 
@@ -74,39 +72,42 @@ huff_init(huff_table_t   * __restrict table,
   uint_fast16_t sym_idx, code, i, start, end, fast_idx, sym;
   uint_fast8_t  len;
 
-  /* initialize fast table with invalid values */
-  memset(table->fast_table, 0xFF, sizeof(table->fast_table));
+  /* Initialize fast table with invalid entries */
+  for (fast_idx = 0; fast_idx < (1U << HUFFMAN_LOOKUP_TABLE_BITS); fast_idx++) {
+    table->fast_table[fast_idx].sym = 0x1FF; /* Invalid symbol (max 9 bits) */
+    table->fast_table[fast_idx].len = 0;     /* Invalid length */
+  }
 
   sym_idx = code = 0;
 
-  /* process each code length (1 to MAX_CODE_LENGTH) */
+  /* Process each code length (1 to MAX_CODE_LENGTH) */
   for (len = 1; len <= MAX_CODE_LENGTH; len++) {
     table->sym_offset[len] = sym_idx;
 
-    /* iterate over all symbols to find those with the current length */
+    /* Iterate over all symbols to find those with the current length */
     for (i = 0; i < n; i++) {
       if (lengths[i] == len) {
-        /* handle sequential symbols */
+        /* Handle sequential symbols */
         sym                    = (symbols != NULL) ? symbols[i] : i;
         table->syms[sym_idx++] = sym;
 
-        /* precompute fast table for short codes (≤ FAST_TABLE_BITS) */
-        if (len <= FAST_TABLE_BITS) {
-          start = code << (FAST_TABLE_BITS - len);
-          end   = (code + 1) << (FAST_TABLE_BITS - len);
+        /* Precompute fast table for short codes (≤ HUFFMAN_LOOKUP_TABLE_BITS) */
+        if (len <= HUFFMAN_LOOKUP_TABLE_BITS) {
+          start = code << (HUFFMAN_LOOKUP_TABLE_BITS - len);
+          end   = (code + 1) << (HUFFMAN_LOOKUP_TABLE_BITS - len);
 
           for (fast_idx = start; fast_idx < end; fast_idx++) {
-            table->fast_table[fast_idx]  = sym;
-            table->fast_length[fast_idx] = len;
+            table->fast_table[fast_idx].sym = sym;
+            table->fast_table[fast_idx].len = len;
           }
         }
 
-        /* increment the canonical code */
+        /* Increment the canonical code */
         code++;
       }
     }
 
-    /* compute sentinel bits for the current length */
+    /* Compute sentinel bits for the current length */
     table->sentinel_bits[len] = code << (MAX_CODE_LENGTH - len);
   }
 }
@@ -191,29 +192,29 @@ huff_read_lsb(const uint8_t *stream, size_t *bit_offset, size_t stream_size) {
   } else
 #endif
 #if defined(__SSE2__)
-    if (remaining_bytes >= 16) {
-      // Load 16 bytes using SSE2
-      __m128i data = _mm_loadu_si128((__m128i *)&stream[byte_offset]);
-      uint64_t lower = _mm_cvtsi128_si64(data);
-      uint64_t upper = _mm_extract_epi64(data, 1);
-      result = ((bitstream_t)upper << 64) | lower;
-    } else
+  if (remaining_bytes >= 16) {
+    // Load 16 bytes using SSE2
+    __m128i data = _mm_loadu_si128((__m128i *)&stream[byte_offset]);
+    uint64_t lower = _mm_cvtsi128_si64(data);
+    uint64_t upper = _mm_extract_epi64(data, 1);
+    result = ((bitstream_t)upper << 64) | lower;
+  } else
 #endif
 #if defined(__ARM_NEON)
-      if (remaining_bytes >= 16) {
-        // Load 16 bytes using NEON
-        uint8x16_t data = vld1q_u8(&stream[byte_offset]);
-        uint64_t lower = vgetq_lane_u64(vreinterpretq_u64_u8(data), 0);
-        uint64_t upper = vgetq_lane_u64(vreinterpretq_u64_u8(data), 1);
-        result = sizeof(bitstream_t) > 8 ? (((bitstream_t)upper << 64) | lower) : (bitstream_t)lower;
-      } else
+  if (remaining_bytes >= 16) {
+    // Load 16 bytes using NEON
+    uint8x16_t data = vld1q_u8(&stream[byte_offset]);
+    uint64_t lower = vgetq_lane_u64(vreinterpretq_u64_u8(data), 0);
+    uint64_t upper = vgetq_lane_u64(vreinterpretq_u64_u8(data), 1);
+    result = sizeof(bitstream_t) > 8 ? (((bitstream_t)upper << 64) | lower) : (bitstream_t)lower;
+  } else
 #endif
-        {
-        // Scalar fallback
-        for (size_t i = 0; i < sizeof(bitstream_t) && i < remaining_bytes; i++) {
-          result |= (bitstream_t)stream[byte_offset + i] << (i * 8);
-        }
-        }
+  {
+    // Scalar fallback
+    for (size_t i = 0; i < sizeof(bitstream_t) && i < remaining_bytes; i++) {
+      result |= (bitstream_t)stream[byte_offset + i] << (i * 8);
+    }
+  }
 
   // Align the result with the bit offset
   result >>= bit_in_byte;
@@ -259,18 +260,18 @@ huff_read_msb(const uint8_t *stream, size_t *bit_offset, size_t stream_size) {
 #if defined(__ARM_NEON)
       if (remaining_bytes >= 16) {
         // Load 16 bytes using NEON
-        uint8x16_t data = vld1q_u8(&stream[byte_offset]);
-        uint64_t lower = vgetq_lane_u64(vreinterpretq_u64_u8(data), 0);
-        uint64_t upper = vgetq_lane_u64(vreinterpretq_u64_u8(data), 1);
+        uint8x16_t data  = vld1q_u8(&stream[byte_offset]);
+        uint64_t   lower = vgetq_lane_u64(vreinterpretq_u64_u8(data), 0);
+        uint64_t   upper = vgetq_lane_u64(vreinterpretq_u64_u8(data), 1);
         result = sizeof(bitstream_t) > 8 ? (((bitstream_t)upper << 64) | lower) : (bitstream_t)lower;
       } else
 #endif
-        {
+      {
         // Scalar fallback
         for (size_t i = 0; i < sizeof(bitstream_t) && i < remaining_bytes; i++) {
           result |= (bitstream_t)stream[byte_offset + i] << (i * 8);
         }
-        }
+      }
 
   // Align the result with the bit offset
   result >>= bit_in_byte;
@@ -281,30 +282,70 @@ huff_read_msb(const uint8_t *stream, size_t *bit_offset, size_t stream_size) {
   return result;
 }
 
+//HUFF_EXPORT
+//uint_fast16_t
+//huff_decode(const huff_table_t *table, bitstream_t bitstream, uint8_t bit_length) {
+//  bitstream_t   code;
+//  uint_fast16_t fast_idx, idx;
+//  uint_fast8_t  l, fast_len;
+//
+//  /* fast lookup for short codes (≤ FAST_TABLE_BITS) */
+//  fast_idx = bitstream & ((1 << FAST_TABLE_BITS) - 1);
+//  fast_len = table->fast_length[fast_idx];
+//
+//  if (fast_len <= bit_length) {
+//    return table->fast_table[fast_idx];
+//  }
+//
+//  /* fallback for longer codes */
+//  for (l = FAST_TABLE_BITS + 1; l <= MAX_CODE_LENGTH; l++) {
+//    if (bitstream < table->sentinel_bits[l]) {
+//      code = bitstream >> (MAX_CODE_LENGTH - l); /* Extract `l`-bit code */
+//      idx  = table->sym_offset[l] + (code - table->sentinel_bits[l - 1]);
+//      return table->syms[idx];
+//    }
+//  }
+//
+//  /* decoding failed */
+//  return (uint_fast16_t)-1;
+//}
+
 HUFF_EXPORT
 uint_fast16_t
-huff_decode(const huff_table_t *table, bitstream_t bitstream, uint8_t bit_length) {
+huff_decode(const huff_table_t * __restrict table,
+            bitstream_t                     bitstream,
+            uint8_t                         bit_length,
+            uint8_t            * __restrict used_bits) {
   bitstream_t   code;
   uint_fast16_t fast_idx, idx;
-  uint_fast8_t  l, fast_len;
+  uint_fast8_t  l, fast_len, max_len;
 
-  /* fast lookup for short codes (≤ FAST_TABLE_BITS) */
-  fast_idx = bitstream & ((1 << FAST_TABLE_BITS) - 1);
-  fast_len = table->fast_length[fast_idx];
-
-  if (fast_len <= bit_length) {
-    return table->fast_table[fast_idx];
+  if (bit_length > MAX_CODE_LENGTH) {
+    /* limit bitstream to valid bits */
+    bit_length = MAX_CODE_LENGTH;
+    max_length = MAX_CODE_LENGTH;
+  } else {
+    max_length = bit_length;
   }
 
-  /* fallback for longer codes */
-  for (l = FAST_TABLE_BITS + 1; l <= MAX_CODE_LENGTH; l++) {
+  /* fast lookup for short codes (≤ FAST_TABLE_BITS) */
+  fast_idx = bitstream & FAST_MASK;
+  if (table->fast_table[fast_idx].len <= bit_length) {
+    *used_bits = table->fast_table[fast_idx].len;
+    return table->fast_table[fast_idx].sym;
+  }
+
+  /* Fallback for longer codes */
+  for (l = FAST_TABLE_BITS + 1; l <= max_length; l++) {
     if (bitstream < table->sentinel_bits[l]) {
-      code = bitstream >> (MAX_CODE_LENGTH - l); /* Extract `l`-bit code */
-      idx  = table->sym_offset[l] + (code - table->sentinel_bits[l - 1]);
+      code       = bitstream >> (MAX_CODE_LENGTH - l); /* Extract `l`-bit code */
+      idx        = table->sym_offset[l] + (code - table->sentinel_bits[l - 1]);
+      *used_bits = l;
       return table->syms[idx];
     }
   }
 
-  /* decoding failed */
+  /* Decoding failed */
+  *used_bits = 0;
   return (uint_fast16_t)-1;
 }
