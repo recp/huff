@@ -44,7 +44,7 @@
 
 #define BITSTREAM_T_IS_128 (sizeof(bitstream_t) > 8)
 
-static const uint8_t bit_reverse_table[256] = {
+static const uint8_t bit_reverse_table[256] HUFF_ALIGN(32) = {
   0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0,
   0x08, 0x88, 0x48, 0xC8, 0x28, 0xA8, 0x68, 0xE8, 0x18, 0x98, 0x58, 0xD8, 0x38, 0xB8, 0x78, 0xF8,
   0x04, 0x84, 0x44, 0xC4, 0x24, 0xA4, 0x64, 0xE4, 0x14, 0x94, 0x54, 0xD4, 0x34, 0xB4, 0x74, 0xF4,
@@ -163,171 +163,128 @@ huff_init_msb(huff_table_t   * __restrict table,
 }
 
 HUFF_EXPORT
-big_int_t
-huff_rev_bits(big_int_t x) {
+bitstream_t
+huff_rev_bits(bitstream_t x) {
 #if defined(__AVX2__)
-#if sizeof(big_int_t) > 8
-  // AVX2 Implementation for 128-bit big_int_t
-  __m256i input = _mm256_set_epi64x(x >> 64, x & 0xFFFFFFFFFFFFFFFFULL, 0, 0);
-  __m256i lookup = _mm256_loadu_si256((__m256i *)bit_reverse_table);
-  __m256i reversed = _mm256_shuffle_epi8(lookup, input);
-  uint64_t lower = _mm256_extract_epi64(reversed, 0);
-  uint64_t upper = _mm256_extract_epi64(reversed, 1);
-  return ((big_int_t)upper << 64) | lower;
-#else
-  // AVX2 Implementation for 64-bit big_int_t
-  __m128i input = _mm_set_epi64x(0, x);
-  __m128i lookup = _mm_loadu_si128((__m128i *)bit_reverse_table);
-  __m128i reversed = _mm_shuffle_epi8(lookup, input);
-  return (big_int_t)_mm_cvtsi128_si64(reversed);
-#endif
-#elif defined(__SSE2__)
-  if (sizeof(big_int_t) == 8) {
-    __m128i input = _mm_set_epi64x(0, x);
-
-    // Load the bit_reverse_table into an SSE register
-    __m128i lookup = _mm_loadu_si128((__m128i *)bit_reverse_table);
-
-    // Perform byte-wise lookup manually
+  if (sizeof(bitstream_t) > 8) {
+    uint64_t lower    = x & 0xFFFFFFFFFFFFFFFFULL;
+    uint64_t upper    = x >> 64;
+    __m256i lookup    = _mm256_loadu_si256((__m256i *)bit_reverse_table);
+    __m128i lower_vec = _mm_cvtsi64_si128(lower);
+    __m128i upper_vec = _mm_cvtsi64_si128(upper);
+    lower_vec         = _mm_shuffle_epi8(_mm256_castsi256_si128(lookup), lower_vec);
+    upper_vec         = _mm_shuffle_epi8(_mm256_castsi256_si128(lookup), upper_vec);
+    lower             = _mm_cvtsi128_si64(lower_vec);
+    upper             = _mm_cvtsi128_si64(upper_vec);
+    return ((bitstream_t)upper << 64) | lower;
+  } else {
+    __m128i input    = _mm_cvtsi64_si128(x);
+    __m128i lookup   = _mm_loadu_si128((__m128i *)bit_reverse_table);
     __m128i reversed = _mm_shuffle_epi8(lookup, input);
-
-    return (big_int_t)_mm_cvtsi128_si64(reversed);
+    return (bitstream_t)_mm_cvtsi128_si64(reversed);
+  }
+#elif defined(__SSSE3__)
+  if (sizeof(bitstream_t) == 8) {
+    __m128i input    = _mm_cvtsi64_si128(x);
+    __m128i lookup   = _mm_loadu_si128((__m128i *)bit_reverse_table);
+    __m128i reversed = _mm_shuffle_epi8(lookup, input);
+    return (bitstream_t)_mm_cvtsi128_si64(reversed);
   }
 #elif defined(__ARM_NEON)
-  if (sizeof(big_int_t) > 8) {
-    uint8x16_t input = vreinterpretq_u8_u64((uint64x2_t){x >> 64, x});
-    uint8x16_t lookup = vld1q_u8(bit_reverse_table);
+  if (sizeof(bitstream_t) > 8) {
+    uint8x16_t input    = vreinterpretq_u8_u64((uint64x2_t){x >> 64, x});
+    uint8x16_t lookup   = vld1q_u8(bit_reverse_table);
     uint8x16_t reversed = vqtbl1q_u8(lookup, input);
-    uint64_t lower = vgetq_lane_u64(vreinterpretq_u64_u8(reversed), 0);
-    uint64_t upper = vgetq_lane_u64(vreinterpretq_u64_u8(reversed), 1);
-    return ((big_int_t)upper << 64) | lower;
-  } else if (sizeof(big_int_t) == 8) {
-    uint8x8_t input = vreinterpret_u8_u64(vdup_n_u64(x));
-    uint8x8_t lookup = vld1_u8(bit_reverse_table);
+    uint64_t lower      = vgetq_lane_u64(vreinterpretq_u64_u8(reversed), 0);
+    uint64_t upper      = vgetq_lane_u64(vreinterpretq_u64_u8(reversed), 1);
+    return ((bitstream_t)upper << 64) | lower;
+  } else {
+    uint8x8_t input    = vreinterpret_u8_u64(vdup_n_u64(x));
+    uint8x8_t lookup   = vld1_u8(bit_reverse_table);
     uint8x8_t reversed = vtbl1_u8(lookup, input);
-    return (big_int_t)vget_lane_u64(vreinterpret_u64_u8(reversed), 0);
+    return (bitstream_t)vget_lane_u64(vreinterpret_u64_u8(reversed), 0);
   }
 #else
-  // Scalar Fallback for all sizes
-
-  size_t    bit_count = sizeof(big_int_t) * 8; // Dynamically determine bit width
-  big_int_t result    = 0;
+  size_t      bit_count = sizeof(bitstream_t) * 8;
+  bitstream_t result    = 0;
 
   for (size_t i = 0; i < bit_count; i++) {
     result |= ((x >> i) & 1) << (bit_count - 1 - i);
   }
   return result;
-
 #endif
 }
 
 HUFF_EXPORT
 bitstream_t
 huff_read_lsb(const uint8_t *stream, size_t *bit_offset, size_t stream_size) {
-  size_t byte_offset = *bit_offset / 8;
-  size_t bit_in_byte = *bit_offset % 8;
-
-  // Ensure we don't read beyond the end of the stream
-  size_t remaining_bytes = (stream_size > byte_offset) ? (stream_size - byte_offset) : 0;
-
-  bitstream_t result = 0;
-
-#if defined(__AVX2__) || defined(__AVX__)
-  if (remaining_bytes >= 32) {
-    // Load 32 bytes using AVX or AVX2
-    __m256i data = _mm256_loadu_si256((__m256i *)&stream[byte_offset]);
-    uint64_t lower = _mm256_extract_epi64(data, 0);
-    uint64_t upper = _mm256_extract_epi64(data, 1);
-    result = ((bitstream_t)upper << 64) | lower;
-  } else
-#endif
-#if defined(__SSE2__)
-  if (remaining_bytes >= 16) {
-    // Load 16 bytes using SSE2
-    __m128i data = _mm_loadu_si128((__m128i *)&stream[byte_offset]);
-    uint64_t lower = _mm_cvtsi128_si64(data);
-    uint64_t upper = _mm_extract_epi64(data, 1);
-    result = ((bitstream_t)upper << 64) | lower;
-  } else
-#endif
-#if defined(__ARM_NEON)
-  if (remaining_bytes >= 16) {
-    // Load 16 bytes using NEON
-    uint8x16_t data = vld1q_u8(&stream[byte_offset]);
-    uint64_t lower = vgetq_lane_u64(vreinterpretq_u64_u8(data), 0);
-    uint64_t upper = vgetq_lane_u64(vreinterpretq_u64_u8(data), 1);
-    result = sizeof(bitstream_t) > 8 ? (((bitstream_t)upper << 64) | lower) : (bitstream_t)lower;
-  } else
-#endif
-  {
-    // Scalar fallback
-    for (size_t i = 0; i < sizeof(bitstream_t) && i < remaining_bytes; i++) {
-      result |= (bitstream_t)stream[byte_offset + i] << (i * 8);
-    }
-  }
-
-  // Align the result with the bit offset
-  result >>= bit_in_byte;
-
-  // Reverse bits for LSB-first order
-  result = huff_rev_bits(result);
-
-  // Advance the bit offset
-  *bit_offset += remaining_bytes * 8 - bit_in_byte;
-
-  return result;
+  return huff_rev_bits(huff_read(stream, bit_offset, stream_size));
 }
 
 HUFF_EXPORT
 bitstream_t
 huff_read(const uint8_t *stream, size_t *bit_offset, size_t stream_size) {
-  size_t byte_offset = *bit_offset / 8;
-  size_t bit_in_byte = *bit_offset % 8;
+  size_t      byte_offset, bit_in_byte, remaining_bytes, bytes_to_load;
+  bitstream_t result;
 
-  // Ensure we don't read beyond the end of the stream
-  size_t remaining_bytes = (stream_size > byte_offset) ? (stream_size - byte_offset) : 0;
+  result          = 0;
+  byte_offset     = *bit_offset / 8;
+  bit_in_byte     = *bit_offset % 8;
 
-  bitstream_t result = 0;
+  /* ensure we don't read beyond the end of the stream */
+  remaining_bytes = (stream_size > byte_offset) ? (stream_size - byte_offset) : 0;
+  bytes_to_load   = (remaining_bytes < sizeof(bitstream_t)) ? remaining_bytes : sizeof(bitstream_t);
 
 #if defined(__AVX2__) || defined(__AVX__)
   if (remaining_bytes >= 32) {
-    // Load 32 bytes using AVX or AVX2
-    __m256i data = _mm256_loadu_si256((__m256i *)&stream[byte_offset]);
+    __m256i data   = _mm256_loadu_si256((__m256i *)&stream[byte_offset]);
     uint64_t lower = _mm256_extract_epi64(data, 0);
     uint64_t upper = _mm256_extract_epi64(data, 1);
-    result = ((bitstream_t)upper << 64) | lower;
+    result         = ((bitstream_t)upper << 64) | lower;
+    bytes_to_load  = 32;
   } else
 #endif
 #if defined(__SSE2__)
-    if (remaining_bytes >= 16) {
-      // Load 16 bytes using SSE2
-      __m128i data = _mm_loadu_si128((__m128i *)&stream[byte_offset]);
-      uint64_t lower = _mm_cvtsi128_si64(data);
-      uint64_t upper = _mm_extract_epi64(data, 1);
-      result = ((bitstream_t)upper << 64) | lower;
-    } else
+  if (remaining_bytes >= 16) {
+    __m128i data   = _mm_loadu_si128((__m128i *)&stream[byte_offset]);
+    uint64_t lower = _mm_cvtsi128_si64(data);
+    uint64_t upper = _mm_extract_epi64(data, 1);
+    result         = ((bitstream_t)upper << 64) | lower;
+    bytes_to_load  = 16;
+  } else
 #endif
 #if defined(__ARM_NEON)
-      if (remaining_bytes >= 16) {
-        // Load 16 bytes using NEON
-        uint8x16_t data  = vld1q_u8(&stream[byte_offset]);
-        uint64_t   lower = vgetq_lane_u64(vreinterpretq_u64_u8(data), 0);
-        uint64_t   upper = vgetq_lane_u64(vreinterpretq_u64_u8(data), 1);
-        result = sizeof(bitstream_t) > 8 ? (((bitstream_t)upper << 64) | lower) : (bitstream_t)lower;
-      } else
+  if (remaining_bytes >= 16) {
+    uint8x16_t data  = vld1q_u8(&stream[byte_offset]);
+    uint64_t   lower = vgetq_lane_u64(vreinterpretq_u64_u8(data), 0);
+    uint64_t   upper = vgetq_lane_u64(vreinterpretq_u64_u8(data), 1);
+    result           = sizeof(bitstream_t) > 8 ? (((bitstream_t)upper << 64) | lower) : (bitstream_t)lower;
+    bytes_to_load    = 16;
+  } else
 #endif
-      {
-        // Scalar fallback
-        for (size_t i = 0; i < sizeof(bitstream_t) && i < remaining_bytes; i++) {
-          result |= (bitstream_t)stream[byte_offset + i] << (i * 8);
-        }
-      }
+  {
+    /* scalar fallback. TODO: optimize this for known int size e.g. 32, 64, 128 */
+    for (size_t i = 0; i < bytes_to_load; i++) {
+      result |= (bitstream_t)stream[byte_offset + i] << (i * 8);
+    }
+  }
 
-  // Align the result with the bit offset
-  result >>= bit_in_byte;
+  result     >>= bit_in_byte;
 
-  // Advance the bit offset
-  *bit_offset += remaining_bytes * 8 - bit_in_byte;
+  /*
+   * Optional: Load an extra byte to fill the shifted bits.
+   * Uncomment the following block if a fully-packed `bitstream_t` is required:
+   *
+   * if (remaining_bytes > bytes_to_load) {
+   *   size_t extra_byte_offset = byte_offset + bytes_to_load;
+   *   if (extra_byte_offset < stream_size) {
+   *     uint8_t extra_byte = stream[extra_byte_offset];
+   *     result |= ((bitstream_t)extra_byte << (sizeof(bitstream_t) * 8 - bit_in_byte));
+   *   }
+   * }
+   */
+
+  *bit_offset += (bytes_to_load * 8) - bit_in_byte;
 
   return result;
 }
