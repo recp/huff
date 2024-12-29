@@ -182,7 +182,7 @@ huff_read_lsb(const uint8_t *stream, size_t *bit_offset, size_t stream_size);
  */
 HUFF_EXPORT
 bitstream_t
-huff_read_msb(const uint8_t *stream, size_t *bit_offset, size_t stream_size);
+huff_read(const uint8_t *stream, size_t *bit_offset, size_t stream_size);
 
 /**
  * @brief Reverses the bit order of the input value.
