@@ -15,8 +15,6 @@ This library seeks to serve as a shared foundation for these and other
 applications, offering standardized, high-performance tools for encoding and 
 decoding Huffman streams.
 
----
-
 ## ⚡ Features
 
 - **Efficient Huffman Table Initialization**:
@@ -34,8 +32,6 @@ decoding Huffman streams.
 - **Flexible APIs**:
   - Dedicated functions for LSB-first and MSB-first streams (`huff_decode_lsb()` and `huff_decode_msb()`).
   - Utilities for bitstream manipulation and bit reversal (`huff_rev_bits()`).
-
----
 
 ## 🔧 Usage
 
