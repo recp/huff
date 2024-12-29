@@ -65,36 +65,36 @@ static const uint8_t bit_reverse_table[256] = {
 
 HUFF_EXPORT
 void
-huff_init(huff_table_t   * __restrict table,
-          const uint8_t  * __restrict lengths,
-          const uint16_t * __restrict symbols,
-          uint16_t                    n) {
+huff_init_lsb(huff_table_t   * __restrict table,
+              const uint8_t  * __restrict lengths,
+              const uint16_t * __restrict symbols,
+              uint16_t                    n) {
   uint_fast16_t sym_idx, code, i, start, end, fast_idx, sym;
   uint_fast8_t  len;
 
-  /* Initialize fast table with invalid entries */
-  for (fast_idx = 0; fast_idx < (1U << HUFFMAN_LOOKUP_TABLE_BITS); fast_idx++) {
-    table->fast_table[fast_idx].sym = 0x1FF; /* Invalid symbol (max 9 bits) */
-    table->fast_table[fast_idx].len = 0;     /* Invalid length */
+  /* initialize fast table with invalid entries */
+  for (fast_idx = 0; fast_idx < FAST_TABLE_SIZE; fast_idx++) {
+    table->fast_table[fast_idx].sym = 0x1FF; /* invalid symbol (max 9 bits) */
+    table->fast_table[fast_idx].len = 0;     /* invalid length */
   }
 
   sym_idx = code = 0;
 
-  /* Process each code length (1 to MAX_CODE_LENGTH) */
+  /* process each code length (1 to MAX_CODE_LENGTH) */
   for (len = 1; len <= MAX_CODE_LENGTH; len++) {
     table->sym_offset[len] = sym_idx;
 
-    /* Iterate over all symbols to find those with the current length */
+    /* iterate over all symbols to find those with the current length */
     for (i = 0; i < n; i++) {
       if (lengths[i] == len) {
-        /* Handle sequential symbols */
+        /* handle sequential symbols */
         sym                    = (symbols != NULL) ? symbols[i] : i;
         table->syms[sym_idx++] = sym;
 
-        /* Precompute fast table for short codes (≤ HUFFMAN_LOOKUP_TABLE_BITS) */
-        if (len <= HUFFMAN_LOOKUP_TABLE_BITS) {
-          start = code << (HUFFMAN_LOOKUP_TABLE_BITS - len);
-          end   = (code + 1) << (HUFFMAN_LOOKUP_TABLE_BITS - len);
+        /* precompute fast table for short codes (≤ FAST_TABLE_BITS) */
+        if (len <= FAST_TABLE_BITS) {
+          start = code << (FAST_TABLE_BITS - len);
+          end   = (code + 1) << (FAST_TABLE_BITS - len);
 
           for (fast_idx = start; fast_idx < end; fast_idx++) {
             table->fast_table[fast_idx].sym = sym;
@@ -102,13 +102,63 @@ huff_init(huff_table_t   * __restrict table,
           }
         }
 
-        /* Increment the canonical code */
+        /* increment the canonical code */
         code++;
       }
     }
 
-    /* Compute sentinel bits for the current length */
-    table->sentinel_bits[len] = code << (MAX_CODE_LENGTH - len);
+    /* compute sentinel bits for the current length (LSB-first) */
+    table->sentinel_bits[len] = code;
+  }
+}
+
+HUFF_EXPORT
+void
+huff_init_msb(huff_table_t   * __restrict table,
+              const uint8_t  * __restrict lengths,
+              const uint16_t * __restrict symbols,
+              uint16_t                    n) {
+  uint_fast16_t sym_idx, code, i, start, end, fast_idx, sym;
+  uint_fast8_t  len, len_shift;
+
+  /* initialize fast table with invalid entries */
+  for (fast_idx = 0; fast_idx < FAST_TABLE_SIZE; fast_idx++) {
+    table->fast_table[fast_idx].sym = 0x1FF; /* invalid symbol (max 9 bits) */
+    table->fast_table[fast_idx].len = 0;     /* invalid length */
+  }
+
+  sym_idx = code = 0;
+
+  /* process each code length (1 to MAX_CODE_LENGTH) */
+  for (len = 1; len <= MAX_CODE_LENGTH; len++) {
+    table->sym_offset[len] = sym_idx;
+    len_shift              = MAX_CODE_LENGTH - len;
+
+    /* iterate over all symbols to find those with the current length */
+    for (i = 0; i < n; i++) {
+      if (lengths[i] == len) {
+        /* handle sequential symbols */
+        sym                    = (symbols != NULL) ? symbols[i] : i;
+        table->syms[sym_idx++] = sym;
+
+        /* precompute fast table for short codes (≤ FAST_TABLE_BITS) */
+        if (len <= FAST_TABLE_BITS) {
+          start = (code << len_shift) >> FAST_SHIFT;
+          end   = ((code + 1) << len_shift) >> FAST_SHIFT;
+
+          for (fast_idx = start; fast_idx < end; fast_idx++) {
+            table->fast_table[fast_idx].sym = sym;
+            table->fast_table[fast_idx].len = len;
+          }
+        }
+
+        /* increment the canonical code */
+        code++;
+      }
+    }
+
+    /* compute sentinel bits for the current length (MSB-first) */
+    table->sentinel_bits[len] = code << len_shift;
   }
 }
 
@@ -282,50 +332,17 @@ huff_read_msb(const uint8_t *stream, size_t *bit_offset, size_t stream_size) {
   return result;
 }
 
-//HUFF_EXPORT
-//uint_fast16_t
-//huff_decode(const huff_table_t *table, bitstream_t bitstream, uint8_t bit_length) {
-//  bitstream_t   code;
-//  uint_fast16_t fast_idx, idx;
-//  uint_fast8_t  l, fast_len;
-//
-//  /* fast lookup for short codes (≤ FAST_TABLE_BITS) */
-//  fast_idx = bitstream & ((1 << FAST_TABLE_BITS) - 1);
-//  fast_len = table->fast_length[fast_idx];
-//
-//  if (fast_len <= bit_length) {
-//    return table->fast_table[fast_idx];
-//  }
-//
-//  /* fallback for longer codes */
-//  for (l = FAST_TABLE_BITS + 1; l <= MAX_CODE_LENGTH; l++) {
-//    if (bitstream < table->sentinel_bits[l]) {
-//      code = bitstream >> (MAX_CODE_LENGTH - l); /* Extract `l`-bit code */
-//      idx  = table->sym_offset[l] + (code - table->sentinel_bits[l - 1]);
-//      return table->syms[idx];
-//    }
-//  }
-//
-//  /* decoding failed */
-//  return (uint_fast16_t)-1;
-//}
-
 HUFF_EXPORT
 uint_fast16_t
-huff_decode(const huff_table_t * __restrict table,
-            bitstream_t                     bitstream,
-            uint8_t                         bit_length,
-            uint8_t            * __restrict used_bits) {
-  bitstream_t   code;
-  uint_fast16_t fast_idx, idx;
-  uint_fast8_t  l, fast_len, max_len;
+huff_decode_lsb(const huff_table_t * __restrict table,
+                bitstream_t                     bitstream,
+                uint8_t                         bit_length,
+                uint8_t            * __restrict used_bits) {
+  uint_fast16_t code, fast_idx, idx;
+  uint_fast8_t  l;
 
   if (bit_length > MAX_CODE_LENGTH) {
-    /* limit bitstream to valid bits */
     bit_length = MAX_CODE_LENGTH;
-    max_length = MAX_CODE_LENGTH;
-  } else {
-    max_length = bit_length;
   }
 
   /* fast lookup for short codes (≤ FAST_TABLE_BITS) */
@@ -335,17 +352,52 @@ huff_decode(const huff_table_t * __restrict table,
     return table->fast_table[fast_idx].sym;
   }
 
-  /* Fallback for longer codes */
-  for (l = FAST_TABLE_BITS + 1; l <= max_length; l++) {
-    if (bitstream < table->sentinel_bits[l]) {
-      code       = bitstream >> (MAX_CODE_LENGTH - l); /* Extract `l`-bit code */
+  /* fallback for longer codes (LSB-first) */
+  for (l = FAST_TABLE_BITS + 1; l <= bit_length; l++) {
+    code = bitstream & ((1ULL << l) - 1);
+    if (code < table->sentinel_bits[l]) {
       idx        = table->sym_offset[l] + (code - table->sentinel_bits[l - 1]);
       *used_bits = l;
       return table->syms[idx];
     }
   }
 
-  /* Decoding failed */
+  /* decoding failed */
+  *used_bits = 0;
+  return (uint_fast16_t)-1;
+}
+
+HUFF_EXPORT
+uint_fast16_t
+huff_decode_msb(const huff_table_t * __restrict table,
+                bitstream_t                     bitstream,
+                uint8_t                         bit_length,
+                uint8_t            * __restrict used_bits) {
+  uint_fast16_t code, fast_idx, idx;
+  uint_fast8_t  l;
+
+  if (bit_length > MAX_CODE_LENGTH) {
+    bit_length = MAX_CODE_LENGTH;
+  }
+
+  /* fast lookup for short codes (≤ FAST_TABLE_BITS) */
+  fast_idx = (bitstream >> FAST_SHIFT) & FAST_MASK;
+  if (table->fast_table[fast_idx].len <= bit_length) {
+    *used_bits = table->fast_table[fast_idx].len;
+    return table->fast_table[fast_idx].sym;
+  }
+
+  /* fallback for longer codes (MSB-first) */
+  for (l = FAST_TABLE_BITS + 1; l <= bit_length; l++) {
+    code = bitstream >> (MAX_CODE_LENGTH - l);
+    if (code < table->sentinel_bits[l]) {
+      idx        = table->sym_offset[l] + (code - table->sentinel_bits[l - 1]);
+      *used_bits = l;
+      return table->syms[idx];
+    }
+  }
+
+  /* decoding failed */
   *used_bits = 0;
   return (uint_fast16_t)-1;
 }

@@ -89,8 +89,10 @@ typedef uint64_t    bitstream_t;
 #endif
 
 /* 15: DEFLATE, 16: JPEG */
-#define MAX_CODE_LENGTH 16  /* maximum length (bits) of Huffman codes     */
-#define FAST_TABLE_BITS  8  /* number of bits used for fast lookup        */
+#define MAX_CODE_LENGTH  16  /* maximum length (bits) of Huffman codes     */
+#define FAST_TABLE_BITS  8   /* number of bits used for fast lookup        */
+#define FAST_TABLE_SIZE  (1U << FAST_TABLE_BITS)
+#define FAST_SHIFT       (MAX_CODE_LENGTH - FAST_TABLE_BITS)
 
 typedef struct huff_table_t {
   /* fast lookup table for short codes (up to 8 bits) */
@@ -107,21 +109,58 @@ typedef struct huff_table_t {
 } huff_table_t;
 
 /*!
- * @brief initializes huffman table
+ * @brief Initializes a Huffman table for decoding LSB-first bitstreams.
  *
- *  NOTE: you can pass NULL to symbols for sequential symbols e.g. DEFLATE
+ * This function initializes a Huffman table using the provided symbol lengths
+ * and symbols. The table is designed to decode bitstreams in LSB-first order,
+ * where the least significant bits are processed first.
  *
- * @param[in, out]  table    huffman table to be initialized
- * @param[in]       lengths  array of bit lengths for each symbol
- * @param[in]       symbols  array of symbols corresponding to the provided lengths
- * @param[in]       n        number of symbols in the lengths and symbols arrays
+ * If the `symbols` array is `NULL`, the symbols will be generated as a sequential
+ * range starting from 0, which is common for formats like DEFLATE.
+ *
+ * @param[in, out]  table    Pointer to the Huffman table to be initialized.
+ * @param[in]       lengths  Array of bit lengths for each symbol. The length of
+ *                           each symbol must not exceed `MAX_CODE_LENGTH`.
+ * @param[in]       symbols  Array of symbols corresponding to the provided lengths.
+ *                           Pass `NULL` for sequential symbols.
+ * @param[in]       n        Number of symbols in the `lengths` (and `symbols`, if provided) array.
+ *
+ * @note This function supports LSB-first bitstreams. For MSB-first bitstreams,
+ *       use `huff_init_msb()`.
  */
 HUFF_EXPORT
 void
-huff_init(huff_table_t   * __restrict table,
-          const uint8_t  * __restrict lengths,
-          const uint16_t * __restrict symbols,
-          uint16_t                    n);
+huff_init_lsb(huff_table_t   * __restrict table,
+              const uint8_t  * __restrict lengths,
+              const uint16_t * __restrict symbols,
+              uint16_t                    n);
+
+/*!
+ * @brief Initializes a Huffman table for decoding MSB-first bitstreams.
+ *
+ * This function initializes a Huffman table using the provided symbol lengths
+ * and symbols. The table is designed to decode bitstreams in MSB-first order,
+ * where the most significant bits are processed first.
+ *
+ * If the `symbols` array is `NULL`, the symbols will be generated as a sequential
+ * range starting from 0, which is common for formats like DEFLATE.
+ *
+ * @param[in, out]  table    Pointer to the Huffman table to be initialized.
+ * @param[in]       lengths  Array of bit lengths for each symbol. The length of
+ *                           each symbol must not exceed `MAX_CODE_LENGTH`.
+ * @param[in]       symbols  Array of symbols corresponding to the provided lengths.
+ *                           Pass `NULL` for sequential symbols.
+ * @param[in]       n        Number of symbols in the `lengths` (and `symbols`, if provided) array.
+ *
+ * @note This function supports MSB-first bitstreams. For LSB-first bitstreams,
+ *       use `huff_init_lsb()`.
+ */
+HUFF_EXPORT
+void
+huff_init_msb(huff_table_t   * __restrict table,
+              const uint8_t  * __restrict lengths,
+              const uint16_t * __restrict symbols,
+              uint16_t                    n);
 
 /**
  * @brief Reads a bitstream_t worth of bits from the input stream.
@@ -164,31 +203,56 @@ big_int_t
 huff_rev_bits(big_int_t x);
 
 /**
- * @brief Decodes a single symbol from a Huffman-encoded bitstream.
+ * @brief Decodes a single symbol from a Huffman-encoded bitstream (LSB-first).
  *
  * This function decodes a symbol using a pre-initialized Huffman table. The
- * bitstream is expected to be in MSB-first order, where the most significant
- * bits are processed first. If the bitstream is in LSB-first order, it should
- * be reversed before calling this function. You can use huff_rev_bits() yo reverse
- * bitstream
+ * bitstream is expected to be in LSB-first order, where the least significant
+ * bits are processed first. If the bitstream is in MSB-first order, it should
+ * be reversed before calling this function. You can use `huff_rev_bits()` to
+ * reverse the bitstream if needed.
  *
  * @param[in]     table       Pointer to the initialized Huffman table.
- * @param[in]     bitstream   The bitstream to decode, in MSB-first order.
+ * @param[in]     bitstream   The bitstream to decode, in LSB-first order.
  * @param[in]     bit_length  The number of valid bits in the bitstream.
- * @param[in,out] used_bits   The number of bits used to decode
+ * @param[out]    used_bits   Pointer to store the number of bits used to decode.
  *
- * @return The decoded symbol, or (uint_fast16_t)-1 if decoding fails.
+ * @return The decoded symbol, or `(uint_fast16_t)-1` if decoding fails.
  *
  * @note The caller is responsible for ensuring the bitstream contains
  *       enough valid bits for decoding a symbol.
  */
 HUFF_EXPORT
 uint_fast16_t
-huff_decode(const huff_table_t * __restrict table,
-            bitstream_t                     bitstream,
-            uint8_t                         bit_length,
-            uint8_t            * __restrict used_bits);
+huff_decode_lsb(const huff_table_t * __restrict table,
+                bitstream_t                     bitstream,
+                uint8_t                         bit_length,
+                uint8_t            * __restrict used_bits);
 
+/**
+ * @brief Decodes a single symbol from a Huffman-encoded bitstream (MSB-first).
+ *
+ * This function decodes a symbol using a pre-initialized Huffman table. The
+ * bitstream is expected to be in MSB-first order, where the most significant
+ * bits are processed first. If the bitstream is in LSB-first order, it should
+ * be reversed before calling this function. You can use `huff_rev_bits()` to
+ * reverse the bitstream if needed.
+ *
+ * @param[in]     table       Pointer to the initialized Huffman table.
+ * @param[in]     bitstream   The bitstream to decode, in MSB-first order.
+ * @param[in]     bit_length  The number of valid bits in the bitstream.
+ * @param[out]    used_bits   Pointer to store the number of bits used to decode.
+ *
+ * @return The decoded symbol, or `(uint_fast16_t)-1` if decoding fails.
+ *
+ * @note The caller is responsible for ensuring the bitstream contains
+ *       enough valid bits for decoding a symbol.
+ */
+HUFF_EXPORT
+uint_fast16_t
+huff_decode_msb(const huff_table_t * __restrict table,
+                bitstream_t                     bitstream,
+                uint8_t                         bit_length,
+                uint8_t            * __restrict used_bits);
 #ifdef __cplusplus
 }
 #endif
