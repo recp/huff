@@ -167,22 +167,30 @@ huff_init_msb(huff_table_t   * __restrict table,
  *
  * @param[in, out] stream     Pointer to the input stream.
  * @param[in, out] bit_offset Current bit offset within the stream.
+ * @param[out]     nbits      Number of loaded bits
  * @return                    A `bitstream_t` containing the requested bits.
  */
 HUFF_EXPORT
 bitstream_t
-huff_read_lsb(const uint8_t *stream, size_t *bit_offset, size_t stream_size);
+huff_read_lsb(const uint8_t * __restrict stream,
+              size_t        * __restrict bit_offset,
+              uint8_t       * __restrict nbits,
+              size_t                     stream_size);
 
 /**
  * @brief Reads a bitstream_t worth of bits from the input stream.
  *
  * @param[in, out] stream     Pointer to the input stream.
  * @param[in, out] bit_offset Current bit offset within the stream.
+ * @param[out]     nbits      Number of loaded bits
  * @return                    A `bitstream_t` containing the requested bits.
  */
 HUFF_EXPORT
 bitstream_t
-huff_read(const uint8_t *stream, size_t *bit_offset, size_t stream_size);
+huff_read(const uint8_t * __restrict stream,
+          size_t        * __restrict bit_offset,
+          uint8_t       * __restrict nbits,
+          size_t                     stream_size);
 
 /**
  * @brief Reverses the bit order of the input value.
@@ -199,8 +207,8 @@ huff_read(const uint8_t *stream, size_t *bit_offset, size_t stream_size);
  * // reversed is now 0b01001101
  */
 HUFF_EXPORT
-big_int_t
-huff_rev_bits(big_int_t x);
+bitstream_t
+huff_rev_bits(bitstream_t x);
 
 /**
  * @brief Decodes a single symbol from a Huffman-encoded bitstream (LSB-first).
@@ -253,6 +261,7 @@ huff_decode_msb(const huff_table_t * __restrict table,
                 bitstream_t                     bitstream,
                 uint8_t                         bit_length,
                 uint8_t            * __restrict used_bits);
+
 #ifdef __cplusplus
 }
 #endif

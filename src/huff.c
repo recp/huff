@@ -217,13 +217,19 @@ huff_rev_bits(bitstream_t x) {
 
 HUFF_EXPORT
 bitstream_t
-huff_read_lsb(const uint8_t *stream, size_t *bit_offset, size_t stream_size) {
-  return huff_rev_bits(huff_read(stream, bit_offset, stream_size));
+huff_read_lsb(const uint8_t * __restrict stream,
+              size_t        * __restrict bit_offset,
+              uint8_t       * __restrict nbits,
+              size_t                     stream_size) {
+  return huff_rev_bits(huff_read(stream, bit_offset, nbits, stream_size));
 }
 
 HUFF_EXPORT
 bitstream_t
-huff_read(const uint8_t *stream, size_t *bit_offset, size_t stream_size) {
+huff_read(const uint8_t * __restrict stream,
+          size_t        * __restrict bit_offset,
+          uint8_t       * __restrict nbits,
+          size_t                     stream_size) {
   size_t      byte_offset, bit_in_byte, remaining_bytes, bytes_to_load;
   bitstream_t result;
 
@@ -284,7 +290,8 @@ huff_read(const uint8_t *stream, size_t *bit_offset, size_t stream_size) {
    * }
    */
 
-  *bit_offset += (bytes_to_load * 8) - bit_in_byte;
+  *nbits       = bytes_to_load * 8;
+  *bit_offset += *nbits - bit_in_byte;
 
   return result;
 }
