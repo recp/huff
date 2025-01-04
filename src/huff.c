@@ -41,6 +41,7 @@
 #include "../include/huff/huff.h"
 
 #define FAST_MASK        ((1 << FAST_TABLE_BITS) - 1)
+#define BIT_MASK(l)      (((bitstream_t)1 << (l)) - 1)
 
 #define BITSTREAM_T_IS_128 (sizeof(bitstream_t) > 8)
 
@@ -78,6 +79,11 @@ huff_init_lsb(huff_table_t   * __restrict table,
     table->fast_table[fast_idx].len = 0;     /* invalid length */
   }
 
+  if (!table->syms) {
+    table->syms = calloc(n, sizeof(uint16_t));
+  }
+
+  table->num_symbols = n;
   sym_idx = code = 0;
 
   /* process each code length (1 to MAX_CODE_LENGTH) */
@@ -127,6 +133,12 @@ huff_init_msb(huff_table_t   * __restrict table,
     table->fast_table[fast_idx].len = 0;     /* invalid length */
   }
 
+
+  if (!table->syms) {
+    table->syms = calloc(n, sizeof(uint16_t));
+  }
+
+  table->num_symbols = n;
   sym_idx = code = 0;
 
   /* process each code length (1 to MAX_CODE_LENGTH) */
