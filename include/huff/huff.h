@@ -106,6 +106,8 @@ typedef struct huff_table_t {
 
   uint16_t *syms;                               /* array of decoded symbols */
   size_t    num_symbols;                        /* number of symbols in the table */
+
+  /* uint8_t max_bitlen; to repalce MAX_CODE_LENGTH */
 } huff_table_t;
 
 /*!
