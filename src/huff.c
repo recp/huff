@@ -64,6 +64,42 @@ static const uint8_t bit_reverse_table[256] HUFF_ALIGN(32) = {
   0x0F, 0x8F, 0x4F, 0xCF, 0x2F, 0xAF, 0x6F, 0xEF, 0x1F, 0x9F, 0x5F, 0xDF, 0x3F, 0xBF, 0x7F, 0xFF
 };
 
+#if DEBUG
+static void
+huff_debug_print(const huff_table_t *table) {
+  printf("=== Huffman Table Debug Info ===\n");
+
+  // Print sentinel_bits
+  printf("Sentinel Bits:\n");
+  for (uint_fast8_t len = 1; len <= MAX_CODE_LENGTH; len++) {
+    printf("Length %u: Sentinel Bits = %u\n", len, table->sentinel_bits[len]);
+  }
+
+  // Print sym_offset
+  printf("\nSymbol Offsets:\n");
+  for (uint_fast8_t len = 1; len <= MAX_CODE_LENGTH; len++) {
+    printf("Length %u: Sym Offset = %u\n", len, table->sym_offset[len]);
+  }
+
+  // Print syms array
+  printf("\nSymbols Array:\n");
+  for (uint_fast16_t i = 0; i < table->num_symbols; i++) {
+    printf("Symbol[%u] = %u\n", i, table->syms[i]);
+  }
+
+  // Print fast table
+  printf("\nFast Table:\n");
+  for (uint_fast16_t i = 0; i < FAST_TABLE_SIZE; i++) {
+    printf("Fast Table[%u]: Sym = %u, Len = %u\n",
+           i,
+           table->fast_table[i].sym,
+           table->fast_table[i].len);
+  }
+
+  printf("================================\n");
+}
+#endif
+
 HUFF_EXPORT
 void
 huff_init_lsb(huff_table_t   * __restrict table,
@@ -116,6 +152,8 @@ huff_init_lsb(huff_table_t   * __restrict table,
     /* compute sentinel bits for the current length (LSB-first) */
     table->sentinel_bits[len] = code;
   }
+
+  // huff_debug_print(table);
 }
 
 HUFF_EXPORT
