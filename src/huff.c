@@ -106,7 +106,61 @@ huff_init_lsb(huff_table_t   * __restrict table,
               const uint8_t  * __restrict lengths,
               const uint16_t * __restrict symbols,
               uint16_t                    n) {
-  uint_fast16_t sym_idx, code, i, start, end, fast_idx, sym;
+  uint_fast16_t sym_idx, code, i, fast_idx, sym, blksz, ext;
+  uint_fast8_t  len;
+
+  /* Initialize fast table with invalid entries */
+  for (fast_idx = 0; fast_idx < FAST_TABLE_SIZE; fast_idx++) {
+    table->fast_table[fast_idx].sym = 0x1FF; /* invalid symbol (max 9 bits) */
+    table->fast_table[fast_idx].len = 0;     /* invalid length */
+  }
+
+  if (!table->syms) {
+    table->syms = calloc(n, sizeof(uint16_t));
+  }
+
+  table->num_symbols      = n;
+  table->sentinel_bits[0] = 0; /* No codes of length 0 */
+  sym_idx                 = 0;
+  code                    = 0; /* LSB-based code counter */
+
+  /* Process each code length (1 to MAX_CODE_LENGTH) */
+  for (len = 1; len <= MAX_CODE_LENGTH; len++) {
+    table->sym_offset[len] = sym_idx;
+
+    /* Iterate over all symbols with the current length */
+    for (i = 0; i < n; i++) {
+      if (lengths[i] == len) {
+        /* Sequential symbols */
+        sym = (symbols != NULL) ? symbols[i] : i;
+        table->syms[sym_idx++] = sym;
+
+        /* Precompute fast table for short codes (≤ FAST_TABLE_BITS) */
+        if (len <= FAST_TABLE_BITS) {
+          blksz = 1U << (FAST_TABLE_BITS - len);
+          for (ext = 0; ext < blksz; ext++) {
+            fast_idx                        = code + (ext << len);
+            table->fast_table[fast_idx].sym = sym;
+            table->fast_table[fast_idx].len = len;
+          }
+        }
+
+        /* Increment the canonical LSB-first code */
+        code++;
+      }
+    }
+
+    /* Sentinel bits for current length */
+    table->sentinel_bits[len] = code;
+  }
+}
+HUFF_EXPORT
+void
+huff_init_lsb3(huff_table_t   * __restrict table,
+              const uint8_t  * __restrict lengths,
+              const uint16_t * __restrict symbols,
+              uint16_t                    n) {
+  uint_fast16_t sym_idx, code, i, fast_idx, sym, blksz, ext;
   uint_fast8_t  len;
 
   /* initialize fast table with invalid entries */
@@ -119,14 +173,21 @@ huff_init_lsb(huff_table_t   * __restrict table,
     table->syms = calloc(n, sizeof(uint16_t));
   }
 
-  table->num_symbols = n;
-  sym_idx = code = 0;
+  table->num_symbols      = n;
+  table->sentinel_bits[0] = 0; /* no codes of length 0 */
+  sym_idx                 = 0; /* where we store next symbol in table->syms[] */
+  code                    = 0; /* LSB-based code counter */
 
-  /* process each code length (1 to MAX_CODE_LENGTH) */
+  /*
+   * 3) For each code length from 1..MAX_CODE_LENGTH:
+   *    Assign the current 'code' to all symbols that have this length.
+   *    Then increment 'code' for each such symbol, continuing
+   *    in plain ascending integer order (no shifts).
+   */
   for (len = 1; len <= MAX_CODE_LENGTH; len++) {
     table->sym_offset[len] = sym_idx;
 
-    /* iterate over all symbols to find those with the current length */
+    /* for all symbols, check if they have 'lengths[i] == len'. */
     for (i = 0; i < n; i++) {
       if (lengths[i] == len) {
         /* handle sequential symbols */
@@ -135,10 +196,13 @@ huff_init_lsb(huff_table_t   * __restrict table,
 
         /* precompute fast table for short codes (≤ FAST_TABLE_BITS) */
         if (len <= FAST_TABLE_BITS) {
-          start = code << (FAST_TABLE_BITS - len);
-          end   = (code + 1) << (FAST_TABLE_BITS - len);
-
-          for (fast_idx = start; fast_idx < end; fast_idx++) {
+          /* We'll replicate 'code' across all possible higher bits:
+           *   index = code + (ext << len)
+           * for ext in [0 .. (1 << (FAST_TABLE_BITS - len)) - 1].
+           */
+          blksz = 1U << (FAST_TABLE_BITS - len);
+          for (ext = 0; ext < blksz; ext++) {
+            fast_idx                        = code + (ext << len);
             table->fast_table[fast_idx].sym = sym;
             table->fast_table[fast_idx].len = len;
           }
@@ -149,7 +213,7 @@ huff_init_lsb(huff_table_t   * __restrict table,
       }
     }
 
-    /* compute sentinel bits for the current length (LSB-first) */
+    /* sentinel_bits[len] = total # of codes up through length 'len' */
     table->sentinel_bits[len] = code;
   }
 
@@ -264,91 +328,166 @@ huff_rev_bits(bitstream_t x) {
   return result;
 #endif
 }
-
 HUFF_EXPORT
 bitstream_t
-huff_read_lsb(const uint8_t * __restrict stream,
-              size_t        * __restrict bit_offset,
-              uint8_t       * __restrict nbits,
-              size_t                     stream_size) {
-  return huff_rev_bits(huff_read(stream, bit_offset, nbits, stream_size));
-}
-
-HUFF_EXPORT
-bitstream_t
-huff_read(const uint8_t * __restrict stream,
+huff_read(const uint8_t ** __restrict p,
           size_t        * __restrict bit_offset,
           uint8_t       * __restrict nbits,
-          size_t                     stream_size) {
-  size_t      byte_offset, bit_in_byte, remaining_bytes, bytes_to_load;
-  bitstream_t result;
-
-  result          = 0;
-  byte_offset     = *bit_offset / 8;
-  bit_in_byte     = *bit_offset % 8;
-
-  /* ensure we don't read beyond the end of the stream */
-  remaining_bytes = (stream_size > byte_offset) ? (stream_size - byte_offset) : 0;
-  bytes_to_load   = (remaining_bytes < sizeof(bitstream_t)) ? remaining_bytes : sizeof(bitstream_t);
-
-#if defined(__AVX2__) || defined(__AVX__)
-  if (remaining_bytes >= 32) {
-    __m256i data   = _mm256_loadu_si256((__m256i *)&stream[byte_offset]);
-    uint64_t lower = _mm256_extract_epi64(data, 0);
-    uint64_t upper = _mm256_extract_epi64(data, 1);
-    result         = ((bitstream_t)upper << 64) | lower;
-    bytes_to_load  = 32;
-  } else
-#endif
-#if defined(__SSE2__)
-  if (remaining_bytes >= 16) {
-    __m128i data   = _mm_loadu_si128((__m128i *)&stream[byte_offset]);
-    uint64_t lower = _mm_cvtsi128_si64(data);
-    uint64_t upper = _mm_extract_epi64(data, 1);
-    result         = ((bitstream_t)upper << 64) | lower;
-    bytes_to_load  = 16;
-  } else
-#endif
-#if defined(__ARM_NEON)
-  if (remaining_bytes >= 16) {
-    uint8x16_t data  = vld1q_u8(&stream[byte_offset]);
-    uint64_t   lower = vgetq_lane_u64(vreinterpretq_u64_u8(data), 0);
-    uint64_t   upper = vgetq_lane_u64(vreinterpretq_u64_u8(data), 1);
-    result           = sizeof(bitstream_t) > 8 ? (((bitstream_t)upper << 64) | lower) : (bitstream_t)lower;
-    bytes_to_load    = 16;
-  } else
-#endif
-  {
-    /* scalar fallback. TODO: optimize this for known int size e.g. 32, 64, 128 */
-    for (size_t i = 0; i < bytes_to_load; i++) {
-      result |= (bitstream_t)stream[byte_offset + i] << (i * 8);
-    }
+          const uint8_t * __restrict end)
+{
+  // Ensure we don't read beyond the end of the buffer
+  if (*p >= end) {
+    *nbits = 0; // No more bits available
+    return 0;
   }
 
-  result     >>= bit_in_byte;
+  size_t bit_in_byte = *bit_offset; // Bits already consumed in the current byte
+  size_t remaining_bytes = (size_t)(end - *p); // Bytes left to read
 
-  /*
-   * Optional: Load an extra byte to fill the shifted bits.
-   * Uncomment the following block if a fully-packed `bitstream_t` is required:
-   *
-   * if (remaining_bytes > bytes_to_load) {
-   *   size_t extra_byte_offset = byte_offset + bytes_to_load;
-   *   if (extra_byte_offset < stream_size) {
-   *     uint8_t extra_byte = stream[extra_byte_offset];
-   *     result |= ((bitstream_t)extra_byte << (sizeof(bitstream_t) * 8 - bit_in_byte));
-   *   }
-   * }
-   */
+  const size_t max_bytes = sizeof(bitstream_t); // Maximum bytes to load
+  size_t bytes_to_load = (remaining_bytes < max_bytes) ? remaining_bytes : max_bytes;
 
-  *nbits       = bytes_to_load * 8;
-  *bit_offset += *nbits - bit_in_byte;
+  bitstream_t result = 0;
+
+  // Load bytes into result, LSB-first
+  for (size_t i = 0; i < bytes_to_load; i++) {
+    result |= (bitstream_t)(*(*p + i)) << (i * 8);
+  }
+
+  // Adjust for bits already consumed in the first byte
+  result >>= bit_in_byte;
+
+  // Update the number of bits read
+  *nbits = (uint8_t)(bytes_to_load * 8 - bit_in_byte);
+
+  // Advance the bit offset and pointer
+  *bit_offset += *nbits;
+  *p += *bit_offset / 8;       // Advance by full bytes
+  *bit_offset %= 8;            // Keep leftover bits in bit_offset
 
   return result;
 }
 
 HUFF_EXPORT
+bitstream_t
+huff_read2(const uint8_t * __restrict stream,
+          size_t        * __restrict bit_offset,
+          uint8_t       * __restrict nbits,
+          size_t                     stream_size)
+{
+  /* figure out how many bytes remain from bit_offset up to stream_size */
+  size_t byte_offset = *bit_offset / 8;
+  size_t bit_in_byte = *bit_offset % 8;
+
+  size_t remaining_bytes = (stream_size > byte_offset)
+  ? (stream_size - byte_offset)
+  : 0;
+
+  /* We'll read at most `max_bytes = sizeof(bitstream_t)` into `result`. */
+  const size_t max_bytes = sizeof(bitstream_t);
+  size_t bytes_to_load   = (remaining_bytes < max_bytes)
+  ? remaining_bytes
+  : max_bytes;
+
+  bitstream_t result = 0;
+
+  /*
+   * If we have a 256-bit bitstream_t (sizeof(bitstream_t) >= 32)
+   * and we have at least 32 bytes left, we can do a 32-byte AVX2/AVX load.
+   */
+//#if (defined(__AVX2__) || defined(__AVX__)) && !defined(__clang__)  /* _mm256_extract_epi64 not always in clang */
+//  if (sizeof(bitstream_t) >= 32 && remaining_bytes >= 32) {
+//    __m256i data   = _mm256_loadu_si256((__m256i *)&stream[byte_offset]);
+//    /* If bitstream_t is 256 bits, you can store all 256 bits from `data`.
+//     For simplicity, assume it's exactly 256 bits: */
+//    result = (bitstream_t)data; /* pseudocode if you have a direct cast or store */
+//    bytes_to_load = 32;
+//  }
+//  else
+//#endif
+//
+//    /*
+//     * If we have a 128-bit bitstream_t (sizeof(bitstream_t) >= 16)
+//     * and we have at least 16 bytes left, we can do a 16-byte SSE2 / NEON load.
+//     */
+//#if defined(__SSE2__) || defined(__ARM_NEON)
+//    if (sizeof(bitstream_t) >= 16 && remaining_bytes >= 16) {
+//#  if defined(__SSE2__)
+//      __m128i data   = _mm_loadu_si128((__m128i *)&stream[byte_offset]);
+//      /* store 128 bits into result (assuming bitstream_t is exactly 128 bits) */
+//      result = (bitstream_t)data;  /* pseudocode; you'll need a union or similar */
+//#  elif defined(__ARM_NEON)
+//      uint8x16_t data = vld1q_u8(&stream[byte_offset]);
+//      /* store 128 bits into result (again, pseudocode if you have 128-bit type) */
+//      result = *((bitstream_t *)&data);  /* or some union trick */
+//#  endif
+//      bytes_to_load = 16;
+//    }
+//    else
+//#endif
+      {
+      /*
+       * Fallback: read up to `bytes_to_load` (which is min(remaining_bytes, max_bytes))
+       * in a scalar loop. This covers the case of a 64-bit bitstream or insufficient data
+       * for a 16/32-byte load.
+       */
+      for (size_t i = 0; i < bytes_to_load; i++) {
+        result |= (bitstream_t)stream[byte_offset + i] << (i * 8);
+      }
+      }
+
+  /*
+   * Now shift out the bits we already used in the partial byte (`bit_in_byte`).
+   * e.g. if bit_in_byte=3, shift off the lowest 3 bits from `result`.
+   */
+  result >>= bit_in_byte;
+
+  /*
+   * Indicate how many bits we loaded total: `bytes_to_load * 8`.
+   * Then update `bit_offset` to skip those bits minus the partial shift.
+   */
+  *nbits       = (uint8_t)(bytes_to_load * 8);
+  *bit_offset += *nbits - bit_in_byte;
+
+  return result;
+}
+HUFF_EXPORT
 uint_fast16_t
 huff_decode_lsb(const huff_table_t * __restrict table,
+                bitstream_t                     bitstream,
+                uint8_t                         bit_length,
+                uint8_t            * __restrict used_bits) {
+  uint_fast16_t code, fast_idx, idx;
+  uint_fast8_t  l;
+
+  if (bit_length > MAX_CODE_LENGTH) {
+    bit_length = MAX_CODE_LENGTH;
+  }
+
+  /* Fast lookup for short codes (≤ FAST_TABLE_BITS) */
+  fast_idx = bitstream & FAST_MASK;
+  if (table->fast_table[fast_idx].len <= bit_length) {
+    *used_bits = table->fast_table[fast_idx].len;
+    return table->fast_table[fast_idx].sym;
+  }
+
+  /* Fallback for longer codes (LSB-first) */
+  for (l = FAST_TABLE_BITS + 1; l <= bit_length; l++) {
+    code = bitstream & ((1ULL << l) - 1); /* Extract LSB-first bits */
+    if (code < table->sentinel_bits[l]) {
+      idx        = table->sym_offset[l] + (code - table->sentinel_bits[l - 1]);
+      *used_bits = l;
+      return table->syms[idx];
+    }
+  }
+
+  /* Decoding failed */
+  *used_bits = 0;
+  return (uint_fast16_t)-1;
+}
+HUFF_EXPORT
+uint_fast16_t
+huff_decode_lsb2(const huff_table_t * __restrict table,
                 bitstream_t                     bitstream,
                 uint8_t                         bit_length,
                 uint8_t            * __restrict used_bits) {
