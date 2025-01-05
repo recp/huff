@@ -362,8 +362,9 @@ huff_read(const uint8_t ** __restrict p,
 
   // Advance the bit offset and pointer
   *bit_offset += *nbits;
-  *p += *bit_offset / 8;       // Advance by full bytes
-  *bit_offset %= 8;            // Keep leftover bits in bit_offset
+  *p += *nbits / 8;       // Advance by full bytes
+//  *p += *bit_offset / 8;       // Advance by full bytes
+  //*bit_offset %= 8;            // Keep leftover bits in bit_offset
 
   return result;
 }
