@@ -452,43 +452,10 @@ huff_read2(const uint8_t * __restrict stream,
 
   return result;
 }
+
 HUFF_EXPORT
 uint_fast16_t
 huff_decode_lsb(const huff_table_t * __restrict table,
-                bitstream_t                     bitstream,
-                uint8_t                         bit_length,
-                uint8_t            * __restrict used_bits) {
-  uint_fast16_t code, fast_idx, idx;
-  uint_fast8_t  l;
-
-  if (bit_length > MAX_CODE_LENGTH) {
-    bit_length = MAX_CODE_LENGTH;
-  }
-
-  /* Fast lookup for short codes (≤ FAST_TABLE_BITS) */
-  fast_idx = bitstream & FAST_MASK;
-  if (table->fast_table[fast_idx].len <= bit_length) {
-    *used_bits = table->fast_table[fast_idx].len;
-    return table->fast_table[fast_idx].sym;
-  }
-
-  /* Fallback for longer codes (LSB-first) */
-  for (l = FAST_TABLE_BITS + 1; l <= bit_length; l++) {
-    code = bitstream & ((1ULL << l) - 1); /* Extract LSB-first bits */
-    if (code < table->sentinel_bits[l]) {
-      idx        = table->sym_offset[l] + (code - table->sentinel_bits[l - 1]);
-      *used_bits = l;
-      return table->syms[idx];
-    }
-  }
-
-  /* Decoding failed */
-  *used_bits = 0;
-  return (uint_fast16_t)-1;
-}
-HUFF_EXPORT
-uint_fast16_t
-huff_decode_lsb2(const huff_table_t * __restrict table,
                 bitstream_t                     bitstream,
                 uint8_t                         bit_length,
                 uint8_t            * __restrict used_bits) {
