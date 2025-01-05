@@ -187,13 +187,18 @@ huff_read_lsb(const uint8_t * __restrict stream,
  * @param[out]     nbits      Number of loaded bits
  * @return                    A `bitstream_t` containing the requested bits.
  */
+//HUFF_EXPORT
+//bitstream_t
+//huff_read(const uint8_t * __restrict stream,
+//          size_t        * __restrict bit_offset,
+//          uint8_t       * __restrict nbits,
+//          size_t                     stream_size);
 HUFF_EXPORT
 bitstream_t
-huff_read(const uint8_t * __restrict stream,
+huff_read(const uint8_t ** __restrict p,
           size_t        * __restrict bit_offset,
           uint8_t       * __restrict nbits,
-          size_t                     stream_size);
-
+          const uint8_t * __restrict end);
 /**
  * @brief Reverses the bit order of the input value.
  *
