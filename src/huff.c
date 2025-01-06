@@ -40,7 +40,7 @@
 
 #include "../include/huff/huff.h"
 
-#define FAST_MASK        ((1 << FAST_TABLE_BITS) - 1)
+#define FAST_MASK        ((1U << FAST_TABLE_BITS) - 1)
 #define BIT_MASK(l)      (((bitstream_t)1 << (l)) - 1)
 
 #define BITSTREAM_T_IS_128 (sizeof(bitstream_t) > 8)
@@ -341,7 +341,7 @@ huff_read(const uint8_t ** __restrict p,
     return 0;
   }
 
-  size_t bit_in_byte = *bit_offset; // Bits already consumed in the current byte
+  size_t bit_in_byte = *bit_offset % 8; // Bits already consumed in the current byte
   size_t remaining_bytes = (size_t)(end - *p); // Bytes left to read
 
   const size_t max_bytes = sizeof(bitstream_t); // Maximum bytes to load
