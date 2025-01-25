@@ -118,11 +118,11 @@ typedef struct huff_fast_entry_ext_t {
   uint32_t sym:16;
   uint32_t value;
   uint32_t mask;
-  uint8_t  total_len;
+  uint8_t  total;
 } huff_fast_entry_ext_t;
 
 typedef struct huff_table_t {
-  HUFF_ALIGN(32) huff_fast_entry_t fast_table[HUFF_FAST_TABLE_SIZE];
+  HUFF_ALIGN(32) huff_fast_entry_t fast[HUFF_FAST_TABLE_SIZE];
 
   union {
     uint16_t sentinels[HUFF_MAX_CODE_LENGTH + 1];
@@ -140,7 +140,7 @@ typedef struct huff_table_t {
 
 /* extended table for extra bits (e.g length/distance in deflate) */
 typedef struct huff_table_ext_t {
-  HUFF_ALIGN(32) huff_fast_entry_ext_t fast_table[HUFF_FAST_TABLE_SIZE];
+  HUFF_ALIGN(32) huff_fast_entry_ext_t fast[HUFF_FAST_TABLE_SIZE];
 
   union {
     uint16_t sentinels[HUFF_MAX_CODE_LENGTH + 1];
