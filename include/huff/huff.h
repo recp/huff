@@ -105,14 +105,13 @@ typedef uint_fast64_t bitstream_t;
 
 typedef struct {unsigned base:16,bits:8,mask:24;} huff_ext_t;
 
-/* Fast table entry with cached value */
 typedef struct huff_fast_entry_t {
   uint32_t   len:8;     /* total bits (Huffman + extra) */
   uint32_t   rev:8;     /* reversed bits for slow path */
   uint32_t   sym:16;    /* symbol */
 } huff_fast_entry_t;
 
-/* Extended fast table entry with extra bits info */
+/* extended fast table entry with extra bits info */
 typedef struct huff_fast_entry_ext_t {
   uint32_t len:8;       /* total bits used (includes extra bits) */
   uint32_t rev:8;       /* reversed bits for slow path */
@@ -122,22 +121,39 @@ typedef struct huff_fast_entry_ext_t {
   uint8_t  total_len;   /* total length including extra bits */
 } huff_fast_entry_ext_t;
 
-/* Basic Huffman table structure */
 typedef struct huff_table_t {
-  huff_fast_entry_t fast_table[1 << FAST_TABLE_BITS];
-  uint16_t          syms[MAX_CODES];
-  uint16_t          sentinels[MAX_CODE_LENGTH + 1];
-  uint16_t          offsets[MAX_CODE_LENGTH + 1];
+  HUFF_ALIGN(32) huff_fast_entry_t fast_table[1U << FAST_TABLE_BITS];
+
+  union {
+    uint16_t sentinels[MAX_CODE_LENGTH + 1];
+    uint16_t maxcode[MAX_CODE_LENGTH   + 1];
+  } HUFF_ALIGN(32);
+
+  union {
+    uint16_t offsets[MAX_CODE_LENGTH + 1];
+    uint16_t mincode[MAX_CODE_LENGTH + 1];
+  } HUFF_ALIGN(32);
+
+  HUFF_ALIGN(32) uint16_t syms[MAX_CODES];
 } huff_table_t;
 
-/* Extended table for length/distance with extra bits */
+/* extended table for extra bits (e.g  length/distance in deflate) */
 typedef struct huff_table_ext_t {
-  huff_fast_entry_ext_t fast_table[1 << FAST_TABLE_BITS];
-  uint16_t              syms[MAX_CODES];
-  uint16_t              sentinels[MAX_CODE_LENGTH + 1];
-  uint16_t              offsets[MAX_CODE_LENGTH + 1];
-  const huff_ext_t     *extras;     /* Extra bits info */
-  int                   offset;     /* Offset for extras (257 for lit/len, 0 for dist) */
+  HUFF_ALIGN(32) huff_fast_entry_ext_t fast_table[1 << FAST_TABLE_BITS];
+
+  union {
+    uint16_t sentinels[MAX_CODE_LENGTH + 1];
+    uint16_t maxcode[MAX_CODE_LENGTH   + 1];
+  } HUFF_ALIGN(32);
+
+  union {
+    uint16_t offsets[MAX_CODE_LENGTH + 1];
+    uint16_t mincode[MAX_CODE_LENGTH + 1];
+  } HUFF_ALIGN(32);
+
+  HUFF_ALIGN(32) uint16_t syms[MAX_CODES];
+  const huff_ext_t       *extras; /* extra bits info                        */
+  int                     offset; /* 257 for lit/len, 0 for dist in deflate */
 } huff_table_ext_t;
 
 #include "read.h"
