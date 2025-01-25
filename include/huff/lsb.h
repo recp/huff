@@ -123,6 +123,7 @@ huff_decode_lsb(const huff_table_t * __restrict table,
     }                                                                       \
   }                                                                         \
 } while(0)
+
 /*!
  * @brief Initializes a Huffman table for decoding LSB-first bitstreams.
  *
@@ -302,7 +303,7 @@ huff_init_lsb_ext(huff_table_ext_t   * restrict table,
 
 HUFF_INLINE
 bool
-huff_init_lsb_ext_o(huff_table_ext_t   * restrict table,
+huff_init_lsb_extof(huff_table_ext_t   * restrict table,
                     const uint8_t      * restrict lengths,
                     const uint16_t     * restrict symbols,
                     const huff_ext_t   * restrict extras,
@@ -425,7 +426,7 @@ huff_decode_lsb_ext(const huff_table_ext_t * __restrict table,
 
 HUFF_INLINE
 uint_fast16_t
-huff_decode_lsb_ext_o(const huff_table_ext_t * __restrict table,
+huff_decode_lsb_extof(const huff_table_ext_t * __restrict table,
                       bitstream_t                         bitstream,
                       uint8_t                * __restrict used,
                       unsigned               * __restrict value,
