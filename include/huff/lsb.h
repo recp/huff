@@ -84,7 +84,7 @@ huff_decode_lsb(const huff_table_t * __restrict table,
   CHECK_LENGTH(11);
   CHECK_LENGTH(12);
 
-  for (l = 13; l <= MAX_CODE_LENGTH; l++) { CHECK_LENGTH(l); }
+  for (l = 13; l <= HUFF_MAX_CODE_LENGTH; l++) { CHECK_LENGTH(l); }
 
 #undef CHECK_LENGTH
   *used = 0;
@@ -107,7 +107,7 @@ huff_decode_lsb(const huff_table_t * __restrict table,
     bits_ = (bitstream) >> 8;                                               \
     code_ = fe_.rev;                                                         \
     /* Handle remaining lengths 13+ */                                      \
-    for (l_ = 9; l_ <= MAX_CODE_LENGTH; l_++) {                           \
+    for (l_ = 9; l_ <= HUFF_MAX_CODE_LENGTH; l_++) {                           \
       code_ = (code_ << 1) | (bits_ & 1);                                   \
       if (code_ < (table)->sentinels[l_]) {                                \
         *(used) = l_;                                                       \
@@ -117,7 +117,7 @@ huff_decode_lsb(const huff_table_t * __restrict table,
       bits_ >>= 1;                                                          \
     }                                                                       \
                                                                             \
-    if (l_ > MAX_CODE_LENGTH) {                                            \
+    if (l_ > HUFF_MAX_CODE_LENGTH) {                                            \
       *(used) = 0;                                                          \
       result = -1;                                                          \
     }                                                                       \
@@ -136,7 +136,7 @@ huff_decode_lsb(const huff_table_t * __restrict table,
  *
  * @param[in, out]  table    Pointer to the Huffman table to be initialized.
  * @param[in]       lengths  Array of bit lengths for each symbol. The length of
- *                           each symbol must not exceed `MAX_CODE_LENGTH`.
+ *                           each symbol must not exceed `HUFF_MAX_CODE_LENGTH`.
  * @param[in]       symbols  Array of symbols corresponding to the provided lengths.
  *                           Pass `NULL` for sequential symbols.
  * @param[in]       n        Number of symbols in the `lengths` (and `symbols`, if provided) array.
@@ -151,9 +151,9 @@ huff_init_lsb(huff_table_t   * restrict table,
               const uint16_t * restrict symbols,
               uint16_t                  n) {
   uint_fast16_t l, i, prev_code = 0, prev_sym_idx = 0;
-  uint_fast16_t count[MAX_CODE_LENGTH   + 1] = {0};
-  uint_fast16_t code[MAX_CODE_LENGTH    + 1];
-  uint_fast16_t sym_idx[MAX_CODE_LENGTH + 1];
+  uint_fast16_t count[HUFF_MAX_CODE_LENGTH   + 1] = {0};
+  uint_fast16_t code[HUFF_MAX_CODE_LENGTH    + 1];
+  uint_fast16_t sym_idx[HUFF_MAX_CODE_LENGTH + 1];
 
   /**
    * currently table->syms is fixed size array
@@ -165,7 +165,7 @@ huff_init_lsb(huff_table_t   * restrict table,
    */
 
   /* mark fast table as invalid */
-  for (i = 0; i < (1U << FAST_TABLE_BITS); i++) {
+  for (i = 0; i < (1U << HUFF_FAST_TABLE_BITS); i++) {
     table->fast_table[i].len = 0;
   }
 
@@ -175,7 +175,7 @@ huff_init_lsb(huff_table_t   * restrict table,
 
   count[0] = code[0] = sym_idx[0] = 0;
 
-  for (l = 1; l <= MAX_CODE_LENGTH; l++) {
+  for (l = 1; l <= HUFF_MAX_CODE_LENGTH; l++) {
     code[l]             = (prev_code   + count[l - 1]) << 1;
     sym_idx[l]          = prev_sym_idx + count[l - 1];
     table->sentinels[l] = code[l]      + count[l];
@@ -191,8 +191,8 @@ huff_init_lsb(huff_table_t   * restrict table,
       table->syms[sym_idx[l]++] = i;
 
       /* fill the fast table for short codes */
-      if (l <= FAST_TABLE_BITS) {
-        uint8_t  padlen = FAST_TABLE_BITS - l;
+      if (l <= HUFF_FAST_TABLE_BITS) {
+        uint8_t  padlen = HUFF_FAST_TABLE_BITS - l;
         uint16_t pad;
         uint8_t  code8, index;
 
@@ -208,7 +208,7 @@ huff_init_lsb(huff_table_t   * restrict table,
   }
 
   /* reverse bits only for slow path entries */
-  for (i = 0; i < (1U << FAST_TABLE_BITS); i++) {
+  for (i = 0; i < (1U << HUFF_FAST_TABLE_BITS); i++) {
     if (table->fast_table[i].len == 0) {
       table->fast_table[i].rev = huff_rev8full((uint8_t)i);
     }
@@ -224,12 +224,12 @@ huff_init_lsb_ext(huff_table_ext_t   * restrict table,
                   const huff_ext_t   * restrict extras,
                   uint16_t                      n) {
   uint_fast16_t l, i, prev_code = 0, prev_sym_idx = 0;
-  uint_fast16_t count[MAX_CODE_LENGTH + 1] = {0};
-  uint_fast16_t code[MAX_CODE_LENGTH + 1];
-  uint_fast16_t sym_idx[MAX_CODE_LENGTH + 1];
+  uint_fast16_t count[HUFF_MAX_CODE_LENGTH + 1] = {0};
+  uint_fast16_t code[HUFF_MAX_CODE_LENGTH + 1];
+  uint_fast16_t sym_idx[HUFF_MAX_CODE_LENGTH + 1];
 
   /* mark fast table as invalid */
-  for (i = 0; i < (1U << FAST_TABLE_BITS); i++) {
+  for (i = 0; i < (1U << HUFF_FAST_TABLE_BITS); i++) {
     table->fast_table[i].len = 0;
   }
 
@@ -239,7 +239,7 @@ huff_init_lsb_ext(huff_table_ext_t   * restrict table,
 
   count[0] = code[0] = sym_idx[0] = 0;
 
-  for (l = 1; l <= MAX_CODE_LENGTH; l++) {
+  for (l = 1; l <= HUFF_MAX_CODE_LENGTH; l++) {
     code[l]             = (prev_code   + count[l - 1]) << 1;
     sym_idx[l]          = prev_sym_idx + count[l - 1];
     table->sentinels[l] = code[l]      + count[l];
@@ -258,8 +258,8 @@ huff_init_lsb_ext(huff_table_ext_t   * restrict table,
       table->syms[sym_idx[l]++] = i;
 
       /* fill the fast table for short codes */
-      if (l <= FAST_TABLE_BITS) {
-        uint8_t  padlen = FAST_TABLE_BITS - l;
+      if (l <= HUFF_FAST_TABLE_BITS) {
+        uint8_t  padlen = HUFF_FAST_TABLE_BITS - l;
         uint16_t pad;
         uint8_t  code8, index;
 
@@ -292,7 +292,7 @@ huff_init_lsb_ext(huff_table_ext_t   * restrict table,
   }
 
   /* reverse bits only for slow path entries */
-  for (i = 0; i < (1U << FAST_TABLE_BITS); i++) {
+  for (i = 0; i < (1U << HUFF_FAST_TABLE_BITS); i++) {
     if (table->fast_table[i].len == 0) {
       table->fast_table[i].rev = huff_rev8full((uint8_t)i);
     }
@@ -310,12 +310,12 @@ huff_init_lsb_extof(huff_table_ext_t   * restrict table,
                     int                           offset,
                     uint16_t                      n) {
   uint_fast16_t l, i, prev_code = 0, prev_sym_idx = 0;
-  uint_fast16_t count[MAX_CODE_LENGTH + 1] = {0};
-  uint_fast16_t code[MAX_CODE_LENGTH + 1];
-  uint_fast16_t sym_idx[MAX_CODE_LENGTH + 1];
+  uint_fast16_t count[HUFF_MAX_CODE_LENGTH + 1] = {0};
+  uint_fast16_t code[HUFF_MAX_CODE_LENGTH + 1];
+  uint_fast16_t sym_idx[HUFF_MAX_CODE_LENGTH + 1];
 
   /* mark fast table as invalid */
-  for (i = 0; i < (1U << FAST_TABLE_BITS); i++) {
+  for (i = 0; i < (1U << HUFF_FAST_TABLE_BITS); i++) {
     table->fast_table[i].len = 0;
   }
 
@@ -325,7 +325,7 @@ huff_init_lsb_extof(huff_table_ext_t   * restrict table,
 
   count[0] = code[0] = sym_idx[0] = 0;
 
-  for (l = 1; l <= MAX_CODE_LENGTH; l++) {
+  for (l = 1; l <= HUFF_MAX_CODE_LENGTH; l++) {
     code[l]             = (prev_code   + count[l - 1]) << 1;
     sym_idx[l]          = prev_sym_idx + count[l - 1];
     table->sentinels[l] = code[l]      + count[l];
@@ -344,8 +344,8 @@ huff_init_lsb_extof(huff_table_ext_t   * restrict table,
       table->syms[sym_idx[l]++] = i;
 
       /* fill the fast table for short codes */
-      if (l <= FAST_TABLE_BITS) {
-        uint8_t  padlen = FAST_TABLE_BITS - l;
+      if (l <= HUFF_FAST_TABLE_BITS) {
+        uint8_t  padlen = HUFF_FAST_TABLE_BITS - l;
         uint16_t pad;
         uint8_t  code8, index;
 
@@ -378,7 +378,7 @@ huff_init_lsb_extof(huff_table_ext_t   * restrict table,
   }
 
   /* reverse bits only for slow path entries */
-  for (i = 0; i < (1U << FAST_TABLE_BITS); i++) {
+  for (i = 0; i < (1U << HUFF_FAST_TABLE_BITS); i++) {
     if (table->fast_table[i].len == 0) {
       table->fast_table[i].rev = huff_rev8full((uint8_t)i);
     }
@@ -409,7 +409,7 @@ huff_decode_lsb_ext(const huff_table_ext_t * __restrict table,
   bits = bitstream >> 8;
   code = fe.rev; /* huff_rev8full(bits8); */
 
-  for (l = 9; l <= MAX_CODE_LENGTH; l++) {
+  for (l = 9; l <= HUFF_MAX_CODE_LENGTH; l++) {
     code = (code << 1) | (bits & 1);
     if (code < table->sentinels[l]) {
       sym    = table->syms[(uint16_t)(table->offsets[l] + code)];
@@ -450,7 +450,7 @@ huff_decode_lsb_extof(const huff_table_ext_t * __restrict table,
   code = fe.rev; /* huff_rev8full(bits8); */
 
   /* slow path */
-  for (l = 9; l <= MAX_CODE_LENGTH; l++) {
+  for (l = 9; l <= HUFF_MAX_CODE_LENGTH; l++) {
     code = (code << 1) | (bits & 1);
     if (code < table->sentinels[l]) {
       sym = table->syms[(uint16_t)(table->offsets[l] + code)];

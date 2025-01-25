@@ -90,68 +90,70 @@ typedef __uint128_t big_int_t;
 typedef uintmax_t   big_int_t;
 #endif
 
-#ifdef ENABLE_BIG_BITSTREAM
+#ifdef HUFF_ENABLE_BIG_BITSTREAM
 typedef big_int_t     bitstream_t;
 #else
 typedef uint_fast64_t bitstream_t;
 #endif
 
 /* 15: DEFLATE, 16: JPEG */
-#define MAX_CODE_LENGTH  16  /* maximum length (bits) of Huffman codes     */
-#define FAST_TABLE_BITS  8   /* number of bits used for fast lookup        */
-#define FAST_TABLE_SIZE  (1U << FAST_TABLE_BITS)
-#define FAST_SHIFT       (MAX_CODE_LENGTH - FAST_TABLE_BITS)
-#define MAX_CODES        288
+#define HUFF_MAX_CODE_LENGTH  16  /* maximum length (bits) of Huffman codes     */
+#define HUFF_FAST_TABLE_BITS  8   /* number of bits used for fast lookup        */
+#define HUFF_FAST_TABLE_SIZE  (1U << HUFF_FAST_TABLE_BITS)
+#define HUFF_FAST_SHIFT       (HUFF_MAX_CODE_LENGTH - HUFF_FAST_TABLE_BITS)
+#define HUFF_MAX_CODES        288
 
-typedef struct {unsigned base:16,bits:8,mask:24;} huff_ext_t;
+typedef struct {uint64_t base:16,bits:8,mask:24;} huff_ext_t;
 
 typedef struct huff_fast_entry_t {
-  uint32_t   len:8;     /* total bits (Huffman + extra) */
-  uint32_t   rev:8;     /* reversed bits for slow path */
-  uint32_t   sym:16;    /* symbol */
+  uint32_t   len:8;
+  uint32_t   rev:8;
+  uint32_t   sym:16;
 } huff_fast_entry_t;
 
 /* extended fast table entry with extra bits info */
 typedef struct huff_fast_entry_ext_t {
-  uint32_t len:8;       /* total bits used (includes extra bits) */
-  uint32_t rev:8;       /* reversed bits for slow path */
-  uint32_t sym:16;      /* symbol */
-  uint32_t value;       /* pre-calculated base value */
-  uint32_t mask;        /* pre-calculated mask for extra bits */
-  uint8_t  total_len;   /* total length including extra bits */
+  uint32_t len:8;
+  uint32_t rev:8;
+  uint32_t sym:16;
+  uint32_t value;
+  uint32_t mask;
+  uint8_t  total_len;
 } huff_fast_entry_ext_t;
 
 typedef struct huff_table_t {
-  HUFF_ALIGN(32) huff_fast_entry_t fast_table[1U << FAST_TABLE_BITS];
+  HUFF_ALIGN(32) huff_fast_entry_t fast_table[HUFF_FAST_TABLE_SIZE];
 
   union {
-    uint16_t sentinels[MAX_CODE_LENGTH + 1];
-    uint16_t maxcode[MAX_CODE_LENGTH   + 1];
+    uint16_t sentinels[HUFF_MAX_CODE_LENGTH + 1];
+    uint16_t maxcode[HUFF_MAX_CODE_LENGTH   + 1];
   } HUFF_ALIGN(32);
 
   union {
-    uint16_t offsets[MAX_CODE_LENGTH + 1];
-    uint16_t mincode[MAX_CODE_LENGTH + 1];
+    uint16_t offsets[HUFF_MAX_CODE_LENGTH + 1];
+    uint16_t mincode[HUFF_MAX_CODE_LENGTH + 1];
   } HUFF_ALIGN(32);
 
-  HUFF_ALIGN(32) uint16_t syms[MAX_CODES];
+  /* uint16_t *sym; to allow dynmaic syms if no overhead? */
+  HUFF_ALIGN(32) uint16_t syms[HUFF_MAX_CODES];
 } huff_table_t;
 
-/* extended table for extra bits (e.g  length/distance in deflate) */
+/* extended table for extra bits (e.g length/distance in deflate) */
 typedef struct huff_table_ext_t {
-  HUFF_ALIGN(32) huff_fast_entry_ext_t fast_table[1 << FAST_TABLE_BITS];
+  HUFF_ALIGN(32) huff_fast_entry_ext_t fast_table[HUFF_FAST_TABLE_SIZE];
 
   union {
-    uint16_t sentinels[MAX_CODE_LENGTH + 1];
-    uint16_t maxcode[MAX_CODE_LENGTH   + 1];
+    uint16_t sentinels[HUFF_MAX_CODE_LENGTH + 1];
+    uint16_t maxcode[HUFF_MAX_CODE_LENGTH   + 1];
   } HUFF_ALIGN(32);
 
   union {
-    uint16_t offsets[MAX_CODE_LENGTH + 1];
-    uint16_t mincode[MAX_CODE_LENGTH + 1];
+    uint16_t offsets[HUFF_MAX_CODE_LENGTH + 1];
+    uint16_t mincode[HUFF_MAX_CODE_LENGTH + 1];
   } HUFF_ALIGN(32);
 
-  HUFF_ALIGN(32) uint16_t syms[MAX_CODES];
+  /* uint16_t *sym; to allow dynmaic syms if no overhead? */
+  HUFF_ALIGN(32) uint16_t syms[HUFF_MAX_CODES];
   const huff_ext_t       *extras; /* extra bits info                        */
   int                     offset; /* 257 for lit/len, 0 for dist in deflate */
 } huff_table_ext_t;
