@@ -30,7 +30,7 @@ HUFF_INLINE
 bitstream_t
 huff_read_scalar(const uint8_t ** __restrict buff,
                  size_t         * __restrict bitpos,
-                 uint_fast16_t  * __restrict nbits,
+                 int            * __restrict nbits,
                  const uint8_t  * __restrict end) {
   const uint8_t *p;
   bitstream_t    result;
@@ -65,7 +65,7 @@ HUFF_INLINE
 bitstream_t
 huff_read_neon(const uint8_t ** __restrict buff,
                size_t         * __restrict bitpos,
-               uint_fast16_t  * __restrict nbits,
+               int            * __restrict nbits,
                const uint8_t  * __restrict end) {
   const uint8_t *p;
   size_t remb;
@@ -115,7 +115,7 @@ HUFF_INLINE
 bitstream_t
 huff_read_sse(const uint8_t ** __restrict buff,
               size_t         * __restrict bitpos,
-              uint_fast16_t  * __restrict nbits,
+              int            * __restrict nbits,
               const uint8_t  * __restrict end) {
   const uint8_t *p;
   size_t remb;
@@ -172,7 +172,7 @@ HUFF_INLINE
 bitstream_t
 huff_read_avx2(const uint8_t ** __restrict buff,
                size_t         * __restrict bitpos,
-               uint_fast16_t  * __restrict nbits,
+               int            * __restrict nbits,
                const uint8_t  * __restrict end) {
   const uint8_t *p;
   size_t remb;
@@ -232,7 +232,7 @@ HUFF_INLINE
 bitstream_t
 huff_read(const uint8_t ** __restrict buff,
           size_t         * __restrict bitpos,
-          uint_fast16_t  * __restrict nbits,
+          int            * __restrict nbits,
           const uint8_t  * __restrict end) {
 #if defined(__AVX2__)
   return huff_read_avx2(buff, bitpos, nbits, end);
