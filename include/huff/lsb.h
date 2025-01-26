@@ -259,21 +259,23 @@ huff_init_lsb_ext(huff_table_ext_t   * __restrict table,
       table->syms[sym_idx[l]++] = i;
 
       if (l <= HUFF_FAST_TABLE_BITS) {
-        uint8_t  padlen, code8, index;
-        uint16_t pad;
+        huff_ext_t ext;
+        uint8_t    padlen, code8, index;
+        uint16_t   pad;
 
         code8  = huff_rev8((uint8_t)code[l]++, l);
         padlen = HUFF_FAST_TABLE_BITS - l;
 
         for (pad = 0; pad < (1U << padlen); pad++) {
           index = (uint8_t)(code8 | (pad << l));
-          table->fast[index].sym = i;
-          table->fast[index].len = (uint8_t)l;
+          ext   = extras[i];
 
-          const huff_ext_t ext = extras[i];
+          table->fast[index].sym   = i;
+          table->fast[index].len   = (uint8_t)l;
+
           table->fast[index].value = ext.base;
           table->fast[index].total = l + ext.bits;
-          table->fast[index].mask  = ext.bits?((1U<<ext.bits)-1):0;
+          table->fast[index].mask  = (1U<<ext.bits)-1;
         }
       }
     }
@@ -331,22 +333,23 @@ huff_init_lsb_extof(huff_table_ext_t   * __restrict table,
       table->syms[sym_idx[l]++] = i;
 
       if (l <= HUFF_FAST_TABLE_BITS) {
-        uint8_t  padlen, code8, index;
-        uint16_t pad;
+        huff_ext_t ext;
+        uint8_t    padlen, code8, index;
+        uint16_t   pad;
 
         code8  = huff_rev8((uint8_t)code[l]++, l);
         padlen = HUFF_FAST_TABLE_BITS - l;
 
         for (pad = 0; pad < (1U << padlen); pad++) {
-          index = (uint8_t)(code8 | (pad << l));
+          index                  = (uint8_t)(code8 | (pad << l));
           table->fast[index].sym = i;
           table->fast[index].len = (uint8_t)l;
           
           if (i >= offset) {
-            const huff_ext_t ext = extras[i - offset];
+            ext                      = extras[i - offset];
             table->fast[index].value = ext.base;
             table->fast[index].total = l + ext.bits;
-            table->fast[index].mask  = ext.bits?((1U <<ext.bits)-1):0;
+            table->fast[index].mask  = (1U<<ext.bits)-1;
           } else {
             table->fast[index].value = 0;
             table->fast[index].mask  = 0;
