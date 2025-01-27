@@ -106,16 +106,16 @@ typedef uint_fast64_t bitstream_t;
 typedef struct {uint64_t base:16,bits:8,mask:24;} huff_ext_t;
 
 typedef struct huff_fast_entry_t {
-  uint32_t   len:8;
-  uint32_t   rev:8;
-  uint32_t   sym:16;
+  uint8_t  len;
+  uint8_t  rev;
+  uint16_t sym;
 } huff_fast_entry_t;
 
 /* extended fast table entry with extra bits info */
 typedef struct huff_fast_entry_ext_t {
-  uint32_t len:8;
-  uint32_t rev:8;
-  uint32_t sym:16;
+  uint8_t  len;
+  uint8_t  rev;
+  uint16_t sym;
   uint32_t value;
   uint32_t mask;
   uint8_t  total;
