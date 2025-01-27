@@ -218,6 +218,54 @@ huff_init_lsb(huff_table_t   * restrict table,
 
 HUFF_INLINE
 bool
+huff_init_fast_lsb(huff_table_t   * restrict table,
+                   const uint8_t  * restrict lengths,
+                   const uint16_t * restrict symbols,
+                   uint16_t                  n) {
+  uint_fast16_t l, i, prev_code = 0;
+  uint_fast16_t count[HUFF_FAST_TABLE_BITS + 1] = {0};
+  uint_fast16_t code[HUFF_FAST_TABLE_BITS  + 1];
+
+  /* mark fast table as invalid */
+  for (i = 0; i < (1U << HUFF_FAST_TABLE_BITS); i++) {
+    table->fast[i].len = 0;
+  }
+
+  /* only count lengths <= HUFF_FAST_TABLE_BITS */
+  for (i = 0; i < n; i++) {
+    l = lengths[i];
+    if (l && l <= HUFF_FAST_TABLE_BITS) {
+      count[l]++;
+    }
+  }
+
+  /* compute first code for each length */
+  code[0] = count[0] = 0;
+  for (l = 1; l <= HUFF_FAST_TABLE_BITS; l++) {
+    code[l]   = (prev_code + count[l - 1]) << 1;
+    prev_code = code[l];
+  }
+
+  /* fill fast table */
+  for (i = 0; i < n; i++) {
+    if ((l = lengths[i]) && l <= HUFF_FAST_TABLE_BITS) {
+      uint8_t  code8 = huff_rev8((uint8_t)code[l]++, l);
+      uint8_t  padlen = HUFF_FAST_TABLE_BITS - l;
+      uint16_t pad;
+
+      for (pad = 0; pad < (1U << padlen); pad++) {
+        uint8_t index = code8 | (pad << l);
+        table->fast[index].sym = i;
+        table->fast[index].len = l;
+      }
+    }
+  }
+
+  return true;
+}
+
+HUFF_INLINE
+bool
 huff_init_lsb_ext(huff_table_ext_t   * __restrict table,
                   const uint8_t      * __restrict lengths,
                   const uint16_t     * __restrict symbols,
