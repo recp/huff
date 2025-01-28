@@ -49,5 +49,6 @@ uint_fast16_t symbol = huff_decode_lsb(&table, bitstream, bit_length, &used_bits
 - [ ] msb
 - [ ] tests
 - [ ] build
+- [ ] documentation
 
 
