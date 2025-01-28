@@ -15,23 +15,7 @@ This library seeks to serve as a shared foundation for these and other
 applications, offering standardized, high-performance tools for encoding and 
 decoding Huffman streams.
 
-## ⚡ Features
-
-- **Efficient Huffman Table Initialization**:
-  - Supports sequential or custom symbol tables.
-  - Optimized for both **LSB-first** and **MSB-first** bitstreams.
-  
-- **Convenient LSB and MSB Decoding**:
-  - **LSB-first decoding**: Used in formats like DEFLATE (e.g., ZIP, PNG).
-  - **MSB-first decoding**: Used in formats like JPEG.
-
-- **Fast Lookup Table**:
-  - Precomputes values for short codes to speed up decoding.
-  - Highly optimized for common use cases with fallback for longer codes.
-
-- **Flexible APIs**:
-  - Dedicated functions for LSB-first and MSB-first streams (`huff_decode_lsb()` and `huff_decode_msb()`).
-  - Utilities for bitstream manipulation and bit reversal (`huff_rev_bits()`).
+🚨 Don't use this in production until tests are ready
 
 ## 🔧 Usage
 
@@ -56,8 +40,15 @@ bitstream_t   bitstream = 0b10110010; // Example LSB-first bitstream
 uint8_t       bit_length = 8; // Number of valid bits
 uint8_t       used_bits;
 uint_fast16_t symbol = huff_decode_lsb(&table, bitstream, bit_length, &used_bits);
-
-// MSB-first decoding
-bitstream_t bitstream_msb = 0b10110010; // Example MSB-first bitstream
-symbol = huff_decode_msb(&table, bitstream_msb, bit_length, &used_bits);
 ```
+
+## TODO
+
+- [x] lsb
+- [ ] sub tables?
+- [ ] msb
+- [ ] tests
+- [ ] build
+- [ ] documentation
+
+
