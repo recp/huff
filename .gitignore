@@ -64,3 +64,4 @@ build*
 *.xcworkspace
 
 testmain/*
+huff copy**
