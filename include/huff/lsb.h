@@ -489,6 +489,7 @@ huff_decode_lsb_extof(const huff_table_ext_t * __restrict table,
         *used  = l + ext.bits;
       } else {
         *used  = l;
+        *value = 0;
       }
       return sym;
     }
