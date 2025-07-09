@@ -65,8 +65,8 @@ huff_read_neon(const uint8_t ** __restrict buff,
 
   p       = *buff;
   remb    = end - p;
-  maxb    = sizeof(bitstream_t);
-  n       = (uint8_t)((remb < maxb) ? remb : maxb);
+  maxb    = (int)sizeof(bitstream_t);
+  n       = ((int)remb < maxb) ? (int)remb : maxb;
 
 #ifdef ENABLE_BIG_BITSTREAM
   // For 128-bit mode, load two 64-bit chunks
