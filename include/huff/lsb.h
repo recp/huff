@@ -49,11 +49,11 @@ huff_decode_lsb(const huff_table_t * __restrict table,
                 uint8_t                         bit_length,
                 uint8_t            * __restrict used) {
   huff_fast_entry_t fe;
-  uint16_t          l, code, bits;
-  uint8_t           bits8;
+  uint16_t          code, bits;
+  uint8_t           bits8, l;
 
   /* align bits so LSB is always in the first position */
-  bits8 = bitstream;
+  bits8 = (uint8_t)bitstream;
   fe    = table->fast[bits8];
 
   if (likely(fe.len)) {
@@ -61,7 +61,7 @@ huff_decode_lsb(const huff_table_t * __restrict table,
     return fe.sym;
   }
 
-  bits = bitstream >> 8;
+  bits = (uint16_t)(bitstream >> 8);
   code = fe.rev; /* huff_rev8full(bits8); */
 
   /* check length and add next bit from LSB to MSB position of our code */
@@ -321,8 +321,8 @@ huff_init_lsb_ext(huff_table_ext_t   * __restrict table,
           table->fast[index].sym   = i;
           table->fast[index].len   = (uint8_t)l;
 
-          table->fast[index].value = ext.base;
-          table->fast[index].total = l + ext.bits;
+          table->fast[index].value = (uint32_t)ext.base;
+          table->fast[index].total = l + (uint8_t)ext.bits;
           table->fast[index].mask  = (1U<<ext.bits)-1;
         }
       }
@@ -393,10 +393,10 @@ huff_init_lsb_extof(huff_table_ext_t   * __restrict table,
           table->fast[index].sym = i;
           table->fast[index].len = (uint8_t)l;
           
-          if (i >= offset) {
+          if ((int)i >= offset) {
             ext                      = extras[i - offset];
-            table->fast[index].value = ext.base;
-            table->fast[index].total = l + ext.bits;
+            table->fast[index].value = (uint32_t)ext.base;
+            table->fast[index].total = l + (uint8_t)ext.bits;
             table->fast[index].mask  = (1U<<ext.bits)-1;
           } else {
             table->fast[index].value = 0;
@@ -427,7 +427,7 @@ huff_decode_lsb_ext(const huff_table_ext_t * __restrict table,
   uint8_t               bits8;
 
   /* align bits so LSB is always in the first position */
-  bits8 = bitstream;
+  bits8 = (uint8_t)bitstream;
   fe    = table->fast[bits8];
 
   if (likely(fe.len)) {
@@ -435,7 +435,7 @@ huff_decode_lsb_ext(const huff_table_ext_t * __restrict table,
     return fe.value + (fe.mask & (unsigned)(bitstream >> fe.len));
   }
 
-  bits = bitstream >> 8;
+  bits = (uint16_t)(bitstream >> 8);
   code = fe.rev; /* huff_rev8full(bits8); */
 
   for (l = 9; l <= HUFF_MAX_CODE_LENGTH; l++) {
@@ -443,8 +443,8 @@ huff_decode_lsb_ext(const huff_table_ext_t * __restrict table,
     if (code < table->sentinels[l]) {
       sym    = table->syms[(uint16_t)(table->offsets[l] + code)];
       ext    = table->extras[sym];
-      *used  = l + ext.bits;
-      return ext.base + (ext.mask & (unsigned)(bitstream >> l));
+      *used  = l + (uint8_t)ext.bits;
+      return (unsigned)(ext.base + (ext.mask & (unsigned)(bitstream >> l)));
     }
     bits >>= 1;
   }
@@ -466,7 +466,7 @@ huff_decode_lsb_extof(const huff_table_ext_t * __restrict table,
   uint8_t               bits8;
 
   /* align bits so LSB is always in the first position */
-  bits8 = bitstream;
+  bits8 = (uint8_t)bitstream;
   fe    = table->fast[bits8];
 
   if (likely(fe.len)) {
@@ -475,7 +475,7 @@ huff_decode_lsb_extof(const huff_table_ext_t * __restrict table,
     return fe.sym;
   }
 
-  bits = bitstream >> 8;
+  bits = (uint16_t)(bitstream >> 8);
   code = fe.rev; /* huff_rev8full(bits8); */
 
   /* slow path */
@@ -485,10 +485,10 @@ huff_decode_lsb_extof(const huff_table_ext_t * __restrict table,
       sym = table->syms[(uint16_t)(table->offsets[l] + code)];
       if (likely(sym >= offset)) {
         ext    = table->extras[sym - offset];
-        *value = ext.base + (ext.mask & (unsigned)(bitstream >> l));
-        *used  = l + ext.bits;
+        *value = (unsigned)(ext.base + (ext.mask & (unsigned)(bitstream >> l)));
+        *used  = l + (uint8_t)ext.bits;
       } else {
-        *used  = l;
+        *used  = (uint8_t)l;
         *value = 0;
       }
       return sym;
