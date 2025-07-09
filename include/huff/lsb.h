@@ -52,6 +52,8 @@ huff_decode_lsb(const huff_table_t * __restrict table,
   uint16_t          code, bits;
   uint8_t           bits8, l;
 
+  (void)bit_length;
+
   /* align bits so LSB is always in the first position */
   bits8 = (uint8_t)bitstream;
   fe    = table->fast[bits8];
@@ -155,6 +157,8 @@ huff_init_lsb(huff_table_t   * restrict table,
   uint_fast16_t code[HUFF_MAX_CODE_LENGTH    + 1];
   uint_fast16_t sym_idx[HUFF_MAX_CODE_LENGTH + 1];
 
+  (void)symbols; /* symbols auto-generated when NULL */
+
   /**
    * currently table->syms is fixed size array
    *
@@ -226,6 +230,8 @@ huff_init_fast_lsb(huff_fast_entry_t         fast[HUFF_FAST_TABLE_SIZE],
   uint_fast16_t count[HUFF_FAST_TABLE_BITS + 1] = {0};
   uint_fast16_t code[HUFF_FAST_TABLE_BITS  + 1];
 
+  (void)symbols; /* symbols auto-generated when NULL */
+
   /* mark fast table as invalid */
   for (i = 0; i < (1U << HUFF_FAST_TABLE_BITS); i++) {
     fast[i].len = 0;
@@ -275,6 +281,8 @@ huff_init_lsb_ext(huff_table_ext_t   * __restrict table,
   uint_fast16_t count[HUFF_MAX_CODE_LENGTH   + 1] = {0};
   uint_fast16_t code[HUFF_MAX_CODE_LENGTH    + 1];
   uint_fast16_t sym_idx[HUFF_MAX_CODE_LENGTH + 1];
+
+  (void)symbols; /* symbols auto-generated when NULL */
 
   prev_code    = 0;
   prev_sym_idx = 0;
@@ -349,6 +357,8 @@ huff_init_lsb_extof(huff_table_ext_t   * __restrict table,
   uint_fast16_t count[HUFF_MAX_CODE_LENGTH   + 1] = {0};
   uint_fast16_t code[HUFF_MAX_CODE_LENGTH    + 1];
   uint_fast16_t sym_idx[HUFF_MAX_CODE_LENGTH + 1];
+
+  (void)symbols; /* symbols auto-generated when NULL */
 
   prev_code    = 0;
   prev_sym_idx = 0;

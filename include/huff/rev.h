@@ -27,10 +27,11 @@ extern "C" {
 #endif
 
 static inline uint8_t huff_rev8(uint8_t b, int len) {
-#if defined(__x86_64__) || defined(__i386__)
-  return (uint8_t)__builtin_bitreverse8(b) >> (8 - len);
-#elif defined(__ARM_NEON) &&  defined(__aarch64__)
+#if defined(__ARM_NEON) && defined(__aarch64__)
   return vget_lane_u8(vrbit_u8(vdup_n_u8(b)), 0) >> (8 - len);
+#elif (defined(__GNUC__) && (__GNUC__ > 14 || (__GNUC__ == 14 && __GNUC_MINOR__ >= 0))) || \
+      (defined(__clang__) && __has_builtin(__builtin_bitreverse8))
+  return (uint8_t)__builtin_bitreverse8(b) >> (8 - len);
 #else
   b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
   b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
@@ -40,10 +41,11 @@ static inline uint8_t huff_rev8(uint8_t b, int len) {
 }
 
 static inline uint8_t huff_rev8full(uint8_t b) {
-#if defined(__x86_64__) || defined(__i386__)
-  return (uint8_t)__builtin_bitreverse8(b);
-#elif defined(__ARM_NEON) &&  defined(__aarch64__)
+#if defined(__ARM_NEON) && defined(__aarch64__)
   return vget_lane_u8(vrbit_u8(vdup_n_u8(b)), 0);
+#elif (defined(__GNUC__) && (__GNUC__ > 14 || (__GNUC__ == 14 && __GNUC_MINOR__ >= 0))) || \
+      (defined(__clang__) && __has_builtin(__builtin_bitreverse8))
+  return (uint8_t)__builtin_bitreverse8(b);
 #else
   b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
   b = (b & 0xCC) >> 2 | (b & 0x33) << 2;

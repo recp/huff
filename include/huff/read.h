@@ -38,8 +38,8 @@ huff_read_scalar(const uint8_t ** __restrict buff,
 
   p       = *buff;
   remb    = end - p;
-  maxb    = sizeof(bitstream_t);
-  n       = (uint8_t)((remb < maxb) ? remb : maxb);
+  maxb    = (int)sizeof(bitstream_t);
+  n       = (remb < maxb) ? (int)remb : maxb;
   result  = 0;
 
   for (i = s = 0; i < n; i++, s += 8) {
@@ -104,8 +104,8 @@ huff_read_sse(const uint8_t ** __restrict buff,
 
   p       = *buff;
   remb    = end - p;
-  maxb    = sizeof(bitstream_t);
-  n       = (uint8_t)((remb < maxb) ? remb : maxb);
+  maxb    = (int)sizeof(bitstream_t);
+  n       = (remb < maxb) ? (int)remb : maxb;
   result  = 0;
 
 #ifdef ENABLE_BIG_BITSTREAM
@@ -140,10 +140,9 @@ huff_read_sse(const uint8_t ** __restrict buff,
 
 #ifdef __AVX2__
 HUFF_INLINE
-bitstream_t
+int
 huff_read_avx2(const uint8_t ** __restrict buff,
-               size_t         * __restrict bitpos,
-               int            * __restrict nbits,
+               bitstream_t    * __restrict bits,
                const uint8_t  * __restrict end) {
   const uint8_t *p;
   bitstream_t    result;
@@ -152,8 +151,8 @@ huff_read_avx2(const uint8_t ** __restrict buff,
 
   p       = *buff;
   remb    = end - p;
-  maxb    = sizeof(bitstream_t);
-  n       = (uint8_t)((remb < maxb) ? remb : maxb);
+  maxb    = (int)sizeof(bitstream_t);
+  n       = (remb < maxb) ? (int)remb : maxb;
   result  = 0;
 
 #ifdef ENABLE_BIG_BITSTREAM
