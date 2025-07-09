@@ -27,22 +27,16 @@ extern "C" {
 #endif
 
 HUFF_INLINE
-bitstream_t
+int
 huff_read_scalar(const uint8_t ** __restrict buff,
-                 size_t         * __restrict bitpos,
-                 int            * __restrict nbits,
+                 bitstream_t    * __restrict bits,
                  const uint8_t  * __restrict end) {
   const uint8_t *p;
   bitstream_t    result;
   size_t         remb;
-  int            i, s, currbit, maxb, n;
+  int            i, s, maxb, n;
 
-  if ((p = *buff) >= end) {
-    *nbits = 0;
-    return 0;
-  }
-
-  currbit = *bitpos % 8;
+  p       = *buff;
   remb    = end - p;
   maxb    = sizeof(bitstream_t);
   n       = (uint8_t)((remb < maxb) ? remb : maxb);
@@ -52,36 +46,27 @@ huff_read_scalar(const uint8_t ** __restrict buff,
     result |= ((bitstream_t)p[i]) << s;
   }
 
-  result >>= currbit;
-  *nbits   = (uint8_t)(n * 8 - currbit);
-  *bitpos += *nbits;
   *buff   += n;
+  *bits    = result;
 
-  return result;
+  return n * 8;
 }
 
 #if defined(__ARM_NEON)
 HUFF_INLINE
-bitstream_t
+int
 huff_read_neon(const uint8_t ** __restrict buff,
-               size_t         * __restrict bitpos,
-               int            * __restrict nbits,
+               bitstream_t    * __restrict bits,
                const uint8_t  * __restrict end) {
   const uint8_t *p;
-  size_t remb;
-  int currbit, maxb, n;
+  bitstream_t    result;
+  size_t         remb;
+  int            maxb, n;
 
-  if ((p = *buff) >= end) {
-    *nbits = 0;
-    return 0;
-  }
-
-  currbit = *bitpos % 8;
+  p       = *buff;
   remb    = end - p;
   maxb    = sizeof(bitstream_t);
   n       = (uint8_t)((remb < maxb) ? remb : maxb);
-
-  bitstream_t result = 0;
 
 #ifdef ENABLE_BIG_BITSTREAM
   // For 128-bit mode, load two 64-bit chunks
@@ -101,37 +86,27 @@ huff_read_neon(const uint8_t ** __restrict buff,
   result = vget_lane_u64(chunk, 0);
 #endif
 
-  // Apply bit shift
-  result >>= currbit;
-
-  *nbits   = (uint8_t)(n * 8 - currbit);
-  *bitpos += *nbits;
   *buff   += n;
+  *bits    = result;
 
-  return result;
+  return n * 8;
 }
 #elif defined(__x86_64__) || defined(_M_X64)
 HUFF_INLINE
-bitstream_t
+int
 huff_read_sse(const uint8_t ** __restrict buff,
-              size_t         * __restrict bitpos,
-              int            * __restrict nbits,
+              bitstream_t    * __restrict bits,
               const uint8_t  * __restrict end) {
   const uint8_t *p;
-  size_t remb;
-  int currbit, maxb, n;
+  bitstream_t    result;
+  size_t         remb;
+  int            maxb, n;
 
-  if ((p = *buff) >= end) {
-    *nbits = 0;
-    return 0;
-  }
-
-  currbit = *bitpos % 8;
+  p       = *buff;
   remb    = end - p;
   maxb    = sizeof(bitstream_t);
   n       = (uint8_t)((remb < maxb) ? remb : maxb);
-
-  bitstream_t result = 0;
+  result  = 0;
 
 #ifdef ENABLE_BIG_BITSTREAM
   // For 128-bit mode, load entire 128 bits at once
@@ -157,14 +132,10 @@ huff_read_sse(const uint8_t ** __restrict buff,
   result = _mm_cvtsi128_si64(_mm_loadu_si128((__m128i*)p));
 #endif
 
-  // Apply bit shift
-  result >>= currbit;
-
-  *nbits   = (uint8_t)(n * 8 - currbit);
-  *bitpos += *nbits;
   *buff   += n;
+  *bits    = result;
 
-  return result;
+  return n * 8;
 }
 
 #ifdef __AVX2__
@@ -175,20 +146,15 @@ huff_read_avx2(const uint8_t ** __restrict buff,
                int            * __restrict nbits,
                const uint8_t  * __restrict end) {
   const uint8_t *p;
-  size_t remb;
-  int currbit, maxb, n;
+  bitstream_t    result;
+  size_t         remb;
+  int            maxb, n;
 
-  if ((p = *buff) >= end) {
-    *nbits = 0;
-    return 0;
-  }
-
-  currbit = *bitpos % 8;
+  p       = *buff;
   remb    = end - p;
   maxb    = sizeof(bitstream_t);
   n       = (uint8_t)((remb < maxb) ? remb : maxb);
-
-  bitstream_t result = 0;
+  result  = 0;
 
 #ifdef ENABLE_BIG_BITSTREAM
   // For 128-bit mode, use AVX2 for loading
@@ -216,32 +182,27 @@ huff_read_avx2(const uint8_t ** __restrict buff,
   result = _mm_cvtsi128_si64(lower);
 #endif
 
-  // Apply bit shift
-  result >>= currbit;
-
-  *nbits   = (uint8_t)(n * 8 - currbit);
-  *bitpos += *nbits;
   *buff   += n;
+  *bits    = result;
 
-  return result;
+  return n * 8;
 }
 #endif
 #endif
 
 HUFF_INLINE
-bitstream_t
+int
 huff_read(const uint8_t ** __restrict buff,
-          size_t         * __restrict bitpos,
-          int            * __restrict nbits,
+          bitstream_t    * __restrict bits,
           const uint8_t  * __restrict end) {
 #if defined(__AVX2__)
-  return huff_read_avx2(buff, bitpos, nbits, end);
+  return huff_read_avx2(buff, bits, end);
 #elif defined(__ARM_NEON)
-  return huff_read_neon(buff, bitpos, nbits, end);
+  return huff_read_neon(buff, bits, end);
 #elif defined(__x86_64__) || defined(_M_X64)
-  return huff_read_sse(buff, bitpos, nbits, end);
+  return huff_read_sse(buff, bits, end);
 #else
-  return huff_read_scalar(buff, bitpos, nbits, end);
+  return huff_read_scalar(buff, bits, end);
 #endif
 }
 
